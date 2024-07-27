@@ -21,6 +21,7 @@ bevy = { version = "0.14", default-features = false, features = [
     "wayland",
     "x11",
 ] }
+rand = "0.8.5"
 
 [profile.dev]
 opt-level = 1

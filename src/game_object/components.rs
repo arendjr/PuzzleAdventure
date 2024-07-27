@@ -6,6 +6,11 @@ pub struct Position {
     pub y: i16,
 }
 
+#[derive(Component)]
+pub struct Animatable {
+    pub num_frames: usize,
+}
+
 /// A deadly entity will kill the player if it comes into contact with it.
 #[derive(Component)]
 pub struct Deadly;
