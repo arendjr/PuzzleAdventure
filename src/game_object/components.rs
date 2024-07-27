@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-#[derive(Component, Eq, PartialEq)]
+#[derive(Component, Debug, Eq, PartialEq)]
 pub struct Position {
     pub x: i16,
     pub y: i16,

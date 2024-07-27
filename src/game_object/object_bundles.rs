@@ -21,6 +21,7 @@ impl BlueBlockBundle {
             position,
             sprite: SpriteBundle {
                 texture: assets.blue_block.clone(),
+                transform: Transform::from_translation(Vec3::new(0., 0., 2.)),
                 ..Default::default()
             },
         }
@@ -41,6 +42,7 @@ impl ExitBundle {
             position,
             sprite: SpriteBundle {
                 texture: assets.exit.clone(),
+                transform: Transform::from_translation(Vec3::new(0., 0., 1.)),
                 ..Default::default()
             },
         }
@@ -61,6 +63,7 @@ impl RedBlockBundle {
             position,
             sprite: SpriteBundle {
                 texture: assets.red_block.clone(),
+                transform: Transform::from_translation(Vec3::new(0., 0., 2.)),
                 ..Default::default()
             },
         }
@@ -81,7 +84,7 @@ impl PlayerBundle {
             position,
             sprite: SpriteBundle {
                 texture: assets.player.clone(),
-                transform: Transform::from_translation(Vec3::new(0., 0., 1.)),
+                transform: Transform::from_translation(Vec3::new(0., 0., 3.)),
                 ..Default::default()
             },
         }
@@ -101,7 +104,7 @@ impl WaterBundle {
             liquid: Liquid,
             sprite: SpriteBundle {
                 texture: assets.water.clone(),
-                transform: Transform::from_translation(Vec3::new(0., 0., -1.)),
+                transform: Transform::from_translation(Vec3::new(0., 0., 1.)),
                 ..Default::default()
             },
             position,
