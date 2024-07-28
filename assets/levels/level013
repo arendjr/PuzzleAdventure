@@ -61,4 +61,5 @@ Position=8,2
 Position=7,5
 
 [BouncingBall]
+Direction=Right
 Position=6,4

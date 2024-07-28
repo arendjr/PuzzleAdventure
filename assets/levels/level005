@@ -22,8 +22,8 @@ Position=16,15;13,16;14,16;15,16
 Position=11,6;3,12;10,14
 
 [BouncingBall]
+Direction=Right
 Position=15,7;9,8;15,9;9,10
-
-[BouncingBall_UpDown]
+Direction=Up
 Position=4,15;5,9;6,15;7,9
 

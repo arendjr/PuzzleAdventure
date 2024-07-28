@@ -1,48 +1,25 @@
 mod constants;
+mod errors;
 mod game_object;
 mod level;
+mod timers;
 mod utils;
 
-use std::{
-    collections::BTreeMap,
-    ops::{Deref, DerefMut},
-};
+use std::collections::BTreeMap;
 
 use bevy::prelude::*;
 use constants::GRID_SIZE;
 use game_object::{
-    spawn_object_of_type, Animatable, Deadly, Exit, Floatable, GameObjectAssets, Liquid, Massive,
-    Movable, ObjectType, Player, Position,
+    spawn_object_of_type, Animatable, Deadly, Direction, Exit, Floatable, GameObjectAssets, Liquid,
+    Massive, Movable, ObjectType, Player, Position, Pushable,
 };
-use level::{Dimensions, Level, LEVELS};
+use level::{Dimensions, InitialPositionAndDirection, Level, LEVELS};
 use rand::{thread_rng, Rng};
+use timers::{AnimationTimer, MovementTimer};
 use utils::load_asset;
 
 #[derive(Component)]
 struct Background;
-
-#[derive(Resource)]
-struct AnimationTimer(Timer);
-
-impl Default for AnimationTimer {
-    fn default() -> Self {
-        Self(Timer::from_seconds(0.2, TimerMode::Repeating))
-    }
-}
-
-impl Deref for AnimationTimer {
-    type Target = Timer;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for AnimationTimer {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
 
 #[derive(Default, Resource)]
 struct CurrentLevel {
@@ -69,6 +46,7 @@ fn main() {
         .init_resource::<CurrentLevel>()
         .init_resource::<Dimensions>()
         .init_resource::<GameObjectAssets>()
+        .init_resource::<MovementTimer>()
         .add_event::<LevelEvent>()
         .add_systems(Startup, setup)
         .add_systems(Update, on_keyboard_input)
@@ -76,7 +54,8 @@ fn main() {
             Update,
             (
                 on_level_event,
-                run_animations,
+                animate_objects,
+                move_objects,
                 check_for_deadly,
                 check_for_exit,
                 check_for_liquid,
@@ -90,76 +69,22 @@ fn main() {
 #[allow(clippy::type_complexity)]
 fn on_keyboard_input(
     mut player_query: Query<&mut Position, With<Player>>,
-    mut objects_query: Query<(&mut Position, Option<&Movable>, Option<&Massive>), Without<Player>>,
+    mut collision_objects_query: Query<CollissionObject, Without<Player>>,
     mut app_exit_events: EventWriter<AppExit>,
     keys: Res<ButtonInput<KeyCode>>,
     mut level_events: EventWriter<LevelEvent>,
     dimensions: Res<Dimensions>,
 ) {
     let mut move_player = |dx, dy| {
-        'players: for mut player_position in &mut player_query {
-            let new_x = player_position.x + dx;
-            let new_y = player_position.y + dy;
-            if new_x < 1 || new_x > dimensions.width || new_y < 1 || new_y > dimensions.height {
-                continue;
-            }
-
-            let mut possible_collission_objects: Vec<_> = objects_query
-                .iter_mut()
-                .filter(|(position, ..)| {
-                    if dx > 0 {
-                        position.x >= new_x && position.y == new_y
-                    } else if dx < 0 {
-                        position.x <= new_x && position.y == new_y
-                    } else if dy > 0 {
-                        position.x == new_x && position.y >= new_y
-                    } else if dy < 0 {
-                        position.x == new_x && position.y <= new_y
-                    } else {
-                        false
-                    }
-                })
-                .collect();
-
-            possible_collission_objects.sort_unstable_by_key(|(position, ..)| {
-                (position.x - new_x).abs() + (position.y - new_y).abs()
-            });
-
-            let can_push_movable_to = |x: i16, y: i16| -> bool {
-                for (position, movable, massive) in &possible_collission_objects {
-                    let has_target_position = position.x == x && position.y == y;
-                    let can_push_to = !movable.is_some() && !massive.is_some();
-                    if has_target_position && !can_push_to {
-                        return false;
-                    }
-                }
-                true
-            };
-
-            let mut moved_object_indices = Vec::new();
-            for (index, (position, movable, massive)) in
-                possible_collission_objects.iter().enumerate()
-            {
-                if position.x == new_x && position.y == new_y {
-                    if movable.is_some() && can_push_movable_to(new_x + dx, new_y + dy) {
-                        moved_object_indices.push(index);
-                        continue;
-                    }
-
-                    if massive.is_some() {
-                        continue 'players;
-                    }
-                }
-            }
-
-            for index in moved_object_indices {
-                let position = &mut possible_collission_objects[index].0;
-                position.x += dx;
-                position.y += dy;
-            }
-
-            player_position.x = new_x;
-            player_position.y = new_y;
+        for mut player_position in &mut player_query {
+            move_object(
+                &mut player_position,
+                dx,
+                dy,
+                &dimensions,
+                collision_objects_query.iter_mut(),
+                true,
+            );
         }
     };
 
@@ -204,7 +129,7 @@ fn position_entities(mut query: Query<(&Position, &mut Transform)>, dimensions: 
     }
 }
 
-fn run_animations(
+fn animate_objects(
     mut timer: ResMut<AnimationTimer>,
     time: Res<Time>,
     mut query: Query<(&Animatable, &mut TextureAtlas)>,
@@ -215,6 +140,120 @@ fn run_animations(
             atlas.index = thread_rng().gen_range(0..animatable.num_frames);
         }
     }
+}
+
+fn move_objects(
+    mut timer: ResMut<MovementTimer>,
+    time: Res<Time>,
+    mut movable_query: Query<(
+        &mut Direction,
+        &Movable,
+        &mut Position,
+        Option<&mut TextureAtlas>,
+    )>,
+    mut collision_objects_query: Query<CollissionObject, Without<Movable>>,
+    dimensions: Res<Dimensions>,
+) {
+    timer.tick(time.delta());
+    if timer.just_finished() {
+        for (mut direction, movable, mut position, mut atlas) in &mut movable_query {
+            match movable {
+                Movable::Bounce => {
+                    let (dx, dy) = direction.to_delta();
+                    if !move_object(
+                        &mut position,
+                        dx,
+                        dy,
+                        &dimensions,
+                        collision_objects_query.iter_mut(),
+                        false,
+                    ) {
+                        *direction = direction.inverse();
+                    }
+                }
+                Movable::FollowRightHand => todo!(),
+            }
+
+            if let Some(atlas) = atlas.as_mut() {
+                atlas.index = *direction as usize;
+            }
+        }
+    }
+}
+
+type CollissionObject<'a> = (Mut<'a, Position>, Option<&'a Pushable>, Option<&'a Massive>);
+
+fn move_object<'a>(
+    position: &mut Mut<Position>,
+    dx: i16,
+    dy: i16,
+    dimensions: &Dimensions,
+    collission_objects: impl Iterator<Item = CollissionObject<'a>>,
+    can_push: bool,
+) -> bool {
+    let new_x = position.x + dx;
+    let new_y = position.y + dy;
+    if new_x < 1 || new_x > dimensions.width || new_y < 1 || new_y > dimensions.height {
+        return false;
+    }
+
+    let mut collission_objects: Vec<_> = collission_objects
+        .filter(|(position, ..)| {
+            if dx > 0 {
+                position.x >= new_x && position.y == new_y
+            } else if dx < 0 {
+                position.x <= new_x && position.y == new_y
+            } else if dy > 0 {
+                position.x == new_x && position.y >= new_y
+            } else if dy < 0 {
+                position.x == new_x && position.y <= new_y
+            } else {
+                false
+            }
+        })
+        .collect();
+
+    collission_objects.sort_unstable_by_key(|(position, ..)| {
+        (position.x - new_x).abs() + (position.y - new_y).abs()
+    });
+
+    let can_push_to = |x: i16, y: i16| -> bool {
+        if x < 1 || x > dimensions.width || y < 1 || y > dimensions.height {
+            return false;
+        }
+        for (position, pushable, massive) in &collission_objects {
+            let has_target_position = position.x == x && position.y == y;
+            let can_push_to = !pushable.is_some() && !massive.is_some();
+            if has_target_position && !can_push_to {
+                return false;
+            }
+        }
+        true
+    };
+
+    let mut pushed_object_indices = Vec::new();
+    for (index, (position, pushable, massive)) in collission_objects.iter().enumerate() {
+        if position.x == new_x && position.y == new_y {
+            if can_push && pushable.is_some() && can_push_to(new_x + dx, new_y + dy) {
+                pushed_object_indices.push(index);
+                continue;
+            }
+
+            if massive.is_some() {
+                return false;
+            }
+        }
+    }
+
+    for index in pushed_object_indices {
+        let position = &mut collission_objects[index].0;
+        position.x += dx;
+        position.y += dy;
+    }
+
+    position.x = new_x;
+    position.y = new_y;
+    true
 }
 
 fn setup(
@@ -299,7 +338,7 @@ fn check_for_liquid(
                         })
                     {
                         let mut object = commands.entity(*object);
-                        object.remove::<Movable>();
+                        object.remove::<Pushable>();
                     }
                 } else if !objects.iter().any(|(_, other_position, _, floatable, _)| {
                     other_position == object_position && floatable.is_some()
@@ -370,12 +409,22 @@ fn load_level(
 
 fn spawn_level_objects(
     commands: &mut ChildBuilder,
-    objects: BTreeMap<ObjectType, Vec<Position>>,
+    objects: BTreeMap<ObjectType, Vec<InitialPositionAndDirection>>,
     assets: &GameObjectAssets,
 ) {
-    for (object_type, positions) in objects {
-        for position in positions {
-            spawn_object_of_type(commands, assets, object_type, position);
+    for (object_type, initial_positions) in objects {
+        for InitialPositionAndDirection {
+            position,
+            direction,
+        } in initial_positions
+        {
+            spawn_object_of_type(
+                commands,
+                assets,
+                object_type,
+                position,
+                direction.unwrap_or_default(),
+            );
         }
     }
 }

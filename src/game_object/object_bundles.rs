@@ -2,15 +2,15 @@ use bevy::prelude::*;
 
 use super::{
     assets::GameObjectAssets,
-    components::{Exit, Liquid, Massive, Movable, Player, Position},
-    Animatable, Floatable,
+    components::{Exit, Liquid, Massive, Player, Position, Pushable},
+    Animatable, Deadly, Direction, Floatable, Movable,
 };
 
 #[derive(Bundle)]
 pub struct BlueBlockBundle {
     massive: Massive,
-    movable: Movable,
     position: Position,
+    pushable: Pushable,
     sprite: SpriteBundle,
 }
 
@@ -18,11 +18,66 @@ impl BlueBlockBundle {
     pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
         Self {
             massive: Massive,
-            movable: Movable,
             position,
+            pushable: Pushable,
             sprite: SpriteBundle {
                 texture: assets.blue_block.clone(),
                 transform: Transform::from_translation(Vec3::new(0., 0., 2.)),
+                ..Default::default()
+            },
+        }
+    }
+}
+
+#[derive(Bundle)]
+pub struct BouncingBallBundle {
+    deadly: Deadly,
+    direction: Direction,
+    movable: Movable,
+    position: Position,
+    sprite: SpriteBundle,
+}
+
+impl BouncingBallBundle {
+    pub fn spawn(assets: &GameObjectAssets, position: Position, direction: Direction) -> Self {
+        Self {
+            deadly: Deadly,
+            direction,
+            movable: Movable::Bounce,
+            position,
+            sprite: SpriteBundle {
+                texture: assets.bouncing_ball.clone(),
+                transform: Transform::from_translation(Vec3::new(0., 0., 4.)),
+                ..Default::default()
+            },
+        }
+    }
+}
+
+#[derive(Bundle)]
+pub struct Creature1Bundle {
+    atlas: TextureAtlas,
+    deadly: Deadly,
+    direction: Direction,
+    movable: Movable,
+    position: Position,
+    sprite: SpriteBundle,
+}
+
+impl Creature1Bundle {
+    pub fn spawn(assets: &GameObjectAssets, position: Position, direction: Direction) -> Self {
+        Self {
+            atlas: TextureAtlas {
+                layout: assets.creature1.1.clone(),
+                index: direction as usize,
+            },
+            deadly: Deadly,
+            direction,
+            movable: Movable::FollowRightHand,
+            position,
+            sprite: SpriteBundle {
+                texture: assets.creature1.0.clone(),
+                transform: Transform::from_translation(Vec3::new(0., 0., 4.)),
                 ..Default::default()
             },
         }
@@ -74,8 +129,8 @@ impl PlayerBundle {
 #[derive(Bundle)]
 pub struct RaftBundle {
     floatable: Floatable,
-    movable: Movable,
     position: Position,
+    pushable: Pushable,
     sprite: SpriteBundle,
 }
 
@@ -83,8 +138,8 @@ impl RaftBundle {
     pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
         Self {
             floatable: Floatable,
-            movable: Movable,
             position,
+            pushable: Pushable,
             sprite: SpriteBundle {
                 texture: assets.raft.clone(),
                 transform: Transform::from_translation(Vec3::new(0., 0., 2.)),
@@ -117,28 +172,28 @@ impl RedBlockBundle {
 
 #[derive(Bundle)]
 pub struct WaterBundle {
+    animatable: Animatable,
+    atlas: TextureAtlas,
     liquid: Liquid,
     position: Position,
     sprite: SpriteBundle,
-    atlas: TextureAtlas,
-    animatable: Animatable,
 }
 
 impl WaterBundle {
     pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
         Self {
-            liquid: Liquid,
-            sprite: SpriteBundle {
-                texture: assets.water.0.clone(),
-                transform: Transform::from_translation(Vec3::new(0., 0., 1.)),
-                ..Default::default()
-            },
             animatable: Animatable { num_frames: 3 },
             atlas: TextureAtlas {
                 layout: assets.water.1.clone(),
                 index: 0,
             },
+            liquid: Liquid,
             position,
+            sprite: SpriteBundle {
+                texture: assets.water.0.clone(),
+                transform: Transform::from_translation(Vec3::new(0., 0., 1.)),
+                ..Default::default()
+            },
         }
     }
 }

@@ -5,7 +5,7 @@ use std::{
 
 use bevy::prelude::Resource;
 
-use crate::game_object::{ObjectType, Position};
+use crate::game_object::{Direction, ObjectType, Position};
 
 pub const LEVELS: &[&str] = &[
     include_str!("../assets/levels/level001"),
@@ -40,15 +40,21 @@ impl Default for Dimensions {
     }
 }
 
+pub struct InitialPositionAndDirection {
+    pub position: Position,
+    pub direction: Option<Direction>,
+}
+
 pub struct Level {
     pub dimensions: Dimensions,
-    pub objects: BTreeMap<ObjectType, Vec<Position>>,
+    pub objects: BTreeMap<ObjectType, Vec<InitialPositionAndDirection>>,
 }
 
 impl Level {
     pub fn load(content: &str) -> Self {
         let mut dimensions = Dimensions::default();
-        let mut objects: BTreeMap<ObjectType, Vec<Position>> = BTreeMap::new();
+        let mut direction = None;
+        let mut objects: BTreeMap<ObjectType, Vec<InitialPositionAndDirection>> = BTreeMap::new();
 
         let mut section_name = None;
         for line in content.lines() {
@@ -86,11 +92,14 @@ impl Level {
             };
 
             if key == "Position" {
-                let positions: Vec<Position> = value
+                let positions: Vec<InitialPositionAndDirection> = value
                     .split(';')
                     .filter_map(|location| match location.split_once(',') {
                         Some((x, y)) => match (x.parse(), y.parse()) {
-                            (Ok(x), Ok(y)) => Some(Position { x, y }),
+                            (Ok(x), Ok(y)) => Some(InitialPositionAndDirection {
+                                position: Position { x, y },
+                                direction,
+                            }),
                             _ => {
                                 println!("Invalid location ({x},{y})");
                                 None
@@ -107,6 +116,13 @@ impl Level {
                         Entry::Vacant(entry) => {
                             entry.insert(positions);
                         }
+                    }
+                }
+            } else if key == "Direction" {
+                match Direction::from_str(value) {
+                    Ok(value) => direction = Some(value),
+                    Err(_) => {
+                        println!("Unknown direction: {value}");
                     }
                 }
             } else {
