@@ -6,9 +6,11 @@ use crate::utils::load_asset;
 pub struct GameObjectAssets {
     pub blue_block: Handle<Image>,
     pub bouncing_ball: Handle<Image>,
+    pub button: Handle<Image>,
     pub creature1: (Handle<Image>, Handle<TextureAtlasLayout>),
     pub explosion: Handle<Image>,
     pub exit: Handle<Image>,
+    pub gate: (Handle<Image>, Handle<TextureAtlasLayout>),
     pub mine: Handle<Image>,
     pub player: Handle<Image>,
     pub raft: Handle<Image>,
@@ -22,6 +24,10 @@ impl GameObjectAssets {
         images: &mut ResMut<Assets<Image>>,
         texture_atlas_layouts: &mut ResMut<Assets<TextureAtlasLayout>>,
     ) -> Self {
+        let one_by_two_atlas = {
+            let layout = TextureAtlasLayout::from_grid(UVec2::splat(48), 1, 2, None, None);
+            texture_atlas_layouts.add(layout)
+        };
         let one_by_three_atlas = {
             let layout = TextureAtlasLayout::from_grid(UVec2::splat(48), 1, 3, None, None);
             texture_atlas_layouts.add(layout)
@@ -38,6 +44,9 @@ impl GameObjectAssets {
             bouncing_ball: images.add(load_asset(include_bytes!(
                 "../../assets/sprites/greenball.png"
             ))),
+            button: images.add(load_asset(include_bytes!(
+                "../../assets/sprites/button.png"
+            ))),
             creature1: (
                 images.add(load_asset(include_bytes!(
                     "../../assets/sprites/creature1.png"
@@ -48,6 +57,10 @@ impl GameObjectAssets {
             explosion: images.add(load_asset(include_bytes!(
                 "../../assets/sprites/explosion.png"
             ))),
+            gate: (
+                images.add(load_asset(include_bytes!("../../assets/sprites/gate.png"))),
+                one_by_two_atlas,
+            ),
             mine: images.add(load_asset(include_bytes!("../../assets/sprites/mine.png"))),
             player: images.add(load_asset(include_bytes!(
                 "../../assets/sprites/player.png"

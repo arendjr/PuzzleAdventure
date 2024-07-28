@@ -126,6 +126,10 @@ pub enum Movable {
     FollowRightHand,
 }
 
+/// A [Massive] entity that can be opened by pressing a [Trigger].
+#[derive(Component)]
+pub struct Openable;
+
 /// Entity is controlled by the player.
 #[derive(Component)]
 pub struct Player;
@@ -134,6 +138,10 @@ pub struct Player;
 /// to move onto it.
 #[derive(Component)]
 pub struct Pushable;
+
+/// Entity acts as trigger for opening gates.
+#[derive(Component)]
+pub struct Trigger;
 
 /// Automatically disappears after spawning.
 #[derive(Component)]

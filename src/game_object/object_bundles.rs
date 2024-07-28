@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use super::{
     assets::GameObjectAssets,
     components::{Exit, Liquid, Massive, Player, Position, Pushable},
-    Animatable, Deadly, Direction, Explosive, Floatable, Movable, Volatile,
+    Animatable, Deadly, Direction, Explosive, Floatable, Movable, Openable, Trigger, Volatile,
 };
 
 #[derive(Bundle)]
@@ -50,6 +50,27 @@ impl BouncingBallBundle {
                 transform: Transform::from_translation(Vec3::new(0., 0., 4.)),
                 ..Default::default()
             },
+        }
+    }
+}
+
+#[derive(Bundle)]
+pub struct ButtonBundle {
+    position: Position,
+    sprite: SpriteBundle,
+    trigger: Trigger,
+}
+
+impl ButtonBundle {
+    pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
+        Self {
+            position,
+            sprite: SpriteBundle {
+                texture: assets.button.clone(),
+                transform: Transform::from_translation(Vec3::new(0., 0., 1.)),
+                ..Default::default()
+            },
+            trigger: Trigger,
         }
     }
 }
@@ -122,6 +143,34 @@ impl ExplosionBundle {
                 ..Default::default()
             },
             volatile: Volatile,
+        }
+    }
+}
+
+#[derive(Bundle)]
+pub struct GateBundle {
+    atlas: TextureAtlas,
+    openable: Openable,
+    massive: Massive,
+    position: Position,
+    sprite: SpriteBundle,
+}
+
+impl GateBundle {
+    pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
+        Self {
+            atlas: TextureAtlas {
+                layout: assets.gate.1.clone(),
+                index: 0,
+            },
+            massive: Massive,
+            openable: Openable,
+            position,
+            sprite: SpriteBundle {
+                texture: assets.gate.0.clone(),
+                transform: Transform::from_translation(Vec3::new(0., 0., 5.)),
+                ..Default::default()
+            },
         }
     }
 }

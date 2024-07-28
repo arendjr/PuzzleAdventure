@@ -5,14 +5,14 @@ mod level;
 mod timers;
 mod utils;
 
-use std::collections::BTreeMap;
+use std::{cmp::Ordering, collections::BTreeMap};
 
 use bevy::prelude::*;
 use constants::GRID_SIZE;
 use game_object::{
     spawn_object_of_type, Animatable, Deadly, Direction, Exit, ExplosionBundle, Explosive,
-    Floatable, GameObjectAssets, Liquid, Massive, Movable, ObjectType, Player, Position, Pushable,
-    SplashBundle, Volatile,
+    Floatable, GameObjectAssets, Liquid, Massive, Movable, ObjectType, Openable, Player, Position,
+    Pushable, SplashBundle, Trigger, Volatile,
 };
 use level::{Dimensions, InitialPositionAndDirection, Level, LEVELS};
 use rand::{thread_rng, Rng};
@@ -25,6 +25,11 @@ struct Background;
 #[derive(Default, Resource)]
 struct CurrentLevel {
     level: usize,
+}
+
+#[derive(Default, Resource)]
+struct PressedTriggers {
+    num_pressed_triggers: usize,
 }
 
 #[derive(Event)]
@@ -48,6 +53,7 @@ fn main() {
         .init_resource::<Dimensions>()
         .init_resource::<GameObjectAssets>()
         .init_resource::<MovementTimer>()
+        .init_resource::<PressedTriggers>()
         .init_resource::<TemporaryTimer>()
         .add_event::<LevelEvent>()
         .add_systems(Startup, setup)
@@ -65,6 +71,12 @@ fn main() {
                 despawn_volatile_objects,
             )
                 .after(on_keyboard_input),
+        )
+        .add_systems(
+            Update,
+            check_for_triggers
+                .after(on_keyboard_input)
+                .after(move_objects),
         )
         .add_systems(
             Update,
@@ -449,11 +461,69 @@ fn check_for_liquid(
     }
 }
 
+type TriggerSystemObject<'a> = (
+    Entity,
+    &'a Position,
+    Option<&'a Openable>,
+    Option<&'a Massive>,
+    Option<&'a Trigger>,
+    Option<&'a mut TextureAtlas>,
+);
+
+fn check_for_triggers(
+    mut commands: Commands,
+    mut query: Query<TriggerSystemObject>,
+    mut pressed_triggers: ResMut<PressedTriggers>,
+) {
+    let mut triggers = Vec::new();
+    let mut openables = Vec::new();
+    let mut objects = Vec::new();
+    for (entity, position, openable, massive, trigger, atlas) in &mut query {
+        if trigger.is_some() {
+            triggers.push(position);
+        } else if openable.is_some() {
+            openables.push((entity, massive, atlas));
+        } else {
+            objects.push(position);
+        }
+    }
+
+    let num_pressed_triggers = triggers
+        .iter()
+        .filter(|trigger_position| objects.iter().any(|position| position == *trigger_position))
+        .count();
+
+    let opened = match num_pressed_triggers.cmp(&pressed_triggers.num_pressed_triggers) {
+        Ordering::Greater => true,
+        Ordering::Less => false,
+        Ordering::Equal => return, // No change.
+    };
+
+    for (openable, massive, atlas) in openables {
+        if opened && massive.is_some() {
+            commands.entity(openable).remove::<Massive>();
+
+            if let Some(mut atlas) = atlas {
+                atlas.index = 1;
+            }
+        } else if !opened && massive.is_none() {
+            commands.entity(openable).insert(Massive);
+
+            if let Some(mut atlas) = atlas {
+                atlas.index = 0;
+            }
+        }
+    }
+
+    pressed_triggers.num_pressed_triggers = num_pressed_triggers;
+}
+
 fn on_level_event(
     commands: Commands,
     background_query: Query<Entity, With<Background>>,
     mut level_events: EventReader<LevelEvent>,
     mut current_level: ResMut<CurrentLevel>,
+    mut pressed_triggers: ResMut<PressedTriggers>,
     dimensions: ResMut<Dimensions>,
     assets: Res<GameObjectAssets>,
 ) {
@@ -478,6 +548,7 @@ fn on_level_event(
 
     if let Some(level) = level {
         load_level(commands, level, background_query, dimensions, assets);
+        pressed_triggers.num_pressed_triggers = 0;
     }
 }
 

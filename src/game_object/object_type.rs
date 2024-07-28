@@ -11,15 +11,17 @@ use super::{
         BlueBlockBundle, BouncingBallBundle, Creature1Bundle, ExitBundle, PlayerBundle, RaftBundle,
         RedBlockBundle, WaterBundle,
     },
-    Direction, MineBundle,
+    ButtonBundle, Direction, GateBundle, MineBundle,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum ObjectType {
     BlueBlock,
     BouncingBall,
+    Button,
     Creature1,
     Exit,
+    Gate,
     Mine,
     Player,
     Raft,
@@ -34,8 +36,10 @@ impl FromStr for ObjectType {
         match object_type {
             "BlueBlock" => Ok(Self::BlueBlock),
             "BouncingBall" => Ok(Self::BouncingBall),
+            "Button" => Ok(Self::Button),
             "Creature1" => Ok(Self::Creature1),
             "Exit" => Ok(Self::Exit),
+            "Gate" => Ok(Self::Gate),
             "Mine" => Ok(Self::Mine),
             "Player" => Ok(Self::Player),
             "Raft" => Ok(Self::Raft),
@@ -58,10 +62,12 @@ pub fn spawn_object_of_type<'a>(
         ObjectType::BouncingBall => {
             commands.spawn(BouncingBallBundle::spawn(assets, position, direction))
         }
+        ObjectType::Button => commands.spawn(ButtonBundle::spawn(assets, position)),
         ObjectType::Creature1 => {
             commands.spawn(Creature1Bundle::spawn(assets, position, direction))
         }
         ObjectType::Exit => commands.spawn(ExitBundle::spawn(assets, position)),
+        ObjectType::Gate => commands.spawn(GateBundle::spawn(assets, position)),
         ObjectType::Mine => commands.spawn(MineBundle::spawn(assets, position)),
         ObjectType::Player => commands.spawn(PlayerBundle::spawn(assets, position)),
         ObjectType::Raft => commands.spawn(RaftBundle::spawn(assets, position)),
