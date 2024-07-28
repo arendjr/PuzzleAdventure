@@ -10,12 +10,13 @@ use std::collections::BTreeMap;
 use bevy::prelude::*;
 use constants::GRID_SIZE;
 use game_object::{
-    spawn_object_of_type, Animatable, Deadly, Direction, Exit, Floatable, GameObjectAssets, Liquid,
-    Massive, Movable, ObjectType, Player, Position, Pushable,
+    spawn_object_of_type, Animatable, Deadly, Direction, Exit, ExplosionBundle, Explosive,
+    Floatable, GameObjectAssets, Liquid, Massive, Movable, ObjectType, Player, Position, Pushable,
+    SplashBundle, Volatile,
 };
 use level::{Dimensions, InitialPositionAndDirection, Level, LEVELS};
 use rand::{thread_rng, Rng};
-use timers::{AnimationTimer, MovementTimer};
+use timers::{AnimationTimer, MovementTimer, TemporaryTimer};
 use utils::load_asset;
 
 #[derive(Component)]
@@ -47,6 +48,7 @@ fn main() {
         .init_resource::<Dimensions>()
         .init_resource::<GameObjectAssets>()
         .init_resource::<MovementTimer>()
+        .init_resource::<TemporaryTimer>()
         .add_event::<LevelEvent>()
         .add_systems(Startup, setup)
         .add_systems(Update, on_keyboard_input)
@@ -58,11 +60,19 @@ fn main() {
                 move_objects,
                 check_for_deadly,
                 check_for_exit,
+                check_for_explosive,
                 check_for_liquid,
+                despawn_volatile_objects,
             )
                 .after(on_keyboard_input),
         )
-        .add_systems(Update, position_entities.after(on_level_event))
+        .add_systems(
+            Update,
+            position_entities
+                .after(on_level_event)
+                .after(check_for_explosive)
+                .after(check_for_liquid),
+        )
         .run();
 }
 
@@ -79,8 +89,7 @@ fn on_keyboard_input(
         for mut player_position in &mut player_query {
             move_object(
                 &mut player_position,
-                dx,
-                dy,
+                (dx, dy),
                 &dimensions,
                 collision_objects_query.iter_mut(),
                 true,
@@ -159,11 +168,9 @@ fn move_objects(
         for (mut direction, movable, mut position, mut atlas) in &mut movable_query {
             match movable {
                 Movable::Bounce => {
-                    let (dx, dy) = direction.to_delta();
                     if !move_object(
                         &mut position,
-                        dx,
-                        dy,
+                        direction.to_delta(),
                         &dimensions,
                         collision_objects_query.iter_mut(),
                         false,
@@ -171,7 +178,25 @@ fn move_objects(
                         *direction = direction.inverse();
                     }
                 }
-                Movable::FollowRightHand => todo!(),
+                Movable::FollowRightHand => {
+                    if move_object(
+                        &mut position,
+                        direction.right_hand().to_delta(),
+                        &dimensions,
+                        collision_objects_query.iter_mut(),
+                        false,
+                    ) {
+                        *direction = direction.right_hand();
+                    } else if !move_object(
+                        &mut position,
+                        direction.to_delta(),
+                        &dimensions,
+                        collision_objects_query.iter_mut(),
+                        false,
+                    ) {
+                        *direction = direction.left_hand();
+                    }
+                }
             }
 
             if let Some(atlas) = atlas.as_mut() {
@@ -185,8 +210,7 @@ type CollissionObject<'a> = (Mut<'a, Position>, Option<&'a Pushable>, Option<&'a
 
 fn move_object<'a>(
     position: &mut Mut<Position>,
-    dx: i16,
-    dy: i16,
+    (dx, dy): (i16, i16),
     dimensions: &Dimensions,
     collission_objects: impl Iterator<Item = CollissionObject<'a>>,
     can_push: bool,
@@ -256,6 +280,20 @@ fn move_object<'a>(
     true
 }
 
+fn despawn_volatile_objects(
+    mut commands: Commands,
+    mut timer: ResMut<TemporaryTimer>,
+    time: Res<Time>,
+    query: Query<Entity, With<Volatile>>,
+) {
+    timer.tick(time.delta());
+    if timer.just_finished() {
+        for entity in &query {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
 fn setup(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
@@ -308,6 +346,51 @@ fn check_for_exit(
     }
 }
 
+type ExplosiveSystemObject<'a> = (
+    Entity,
+    &'a Position,
+    Option<&'a Explosive>,
+    Option<&'a Player>,
+);
+
+fn check_for_explosive(
+    mut commands: Commands,
+    explosive_query: Query<ExplosiveSystemObject>,
+    background_query: Query<Entity, With<Background>>,
+    mut level_events: EventWriter<LevelEvent>,
+    mut temporary_timer: ResMut<TemporaryTimer>,
+    assets: Res<GameObjectAssets>,
+) {
+    let (explosives, objects): (Vec<ExplosiveSystemObject>, Vec<ExplosiveSystemObject>) =
+        explosive_query
+            .iter()
+            .partition(|(_, _, liquid, ..)| liquid.is_some());
+
+    for (explosive, explosive_position, ..) in explosives {
+        for (object, position, _, player) in &objects {
+            if explosive_position == *position {
+                commands.entity(explosive).despawn();
+                commands.entity(*object).despawn();
+
+                let background = background_query
+                    .get_single()
+                    .expect("there should be only one background");
+                let mut background = commands.entity(background);
+                background.with_children(|cb| {
+                    cb.spawn(ExplosionBundle::spawn(&assets, **position));
+                });
+                if temporary_timer.finished() {
+                    temporary_timer.reset();
+                }
+
+                if player.is_some() {
+                    level_events.send(LevelEvent::Reload);
+                }
+            }
+        }
+    }
+}
+
 type LiquidSystemObject<'a> = (
     Entity,
     &'a Position,
@@ -318,32 +401,44 @@ type LiquidSystemObject<'a> = (
 
 fn check_for_liquid(
     mut commands: Commands,
-    objects_query: Query<LiquidSystemObject>,
+    liquid_query: Query<LiquidSystemObject>,
+    background_query: Query<Entity, With<Background>>,
     mut level_events: EventWriter<LevelEvent>,
+    mut temporary_timer: ResMut<TemporaryTimer>,
+    assets: Res<GameObjectAssets>,
 ) {
-    let (liquids, objects): (Vec<LiquidSystemObject>, Vec<LiquidSystemObject>) = objects_query
+    let (liquids, objects): (Vec<LiquidSystemObject>, Vec<LiquidSystemObject>) = liquid_query
         .iter()
         .partition(|(_, _, liquid, ..)| liquid.is_some());
 
     for (_liquid, liquid_position, ..) in liquids {
-        for (object, object_position, _, floatable, player) in &objects {
-            if liquid_position == *object_position {
+        for (object, position, _, floatable, player) in &objects {
+            if liquid_position == *position {
                 if floatable.is_some() {
                     if !objects
                         .iter()
                         .any(|(other, other_position, _, floatable, _)| {
-                            other != object
-                                && other_position == object_position
-                                && floatable.is_some()
+                            other != object && other_position == position && floatable.is_some()
                         })
                     {
                         let mut object = commands.entity(*object);
                         object.remove::<Pushable>();
                     }
                 } else if !objects.iter().any(|(_, other_position, _, floatable, _)| {
-                    other_position == object_position && floatable.is_some()
+                    other_position == position && floatable.is_some()
                 }) {
                     commands.entity(*object).despawn();
+
+                    let background = background_query
+                        .get_single()
+                        .expect("there should be only one background");
+                    let mut background = commands.entity(background);
+                    background.with_children(|cb| {
+                        cb.spawn(SplashBundle::spawn(&assets, **position));
+                    });
+                    if temporary_timer.finished() {
+                        temporary_timer.reset();
+                    }
 
                     if player.is_some() {
                         level_events.send(LevelEvent::Reload);

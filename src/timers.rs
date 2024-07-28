@@ -47,3 +47,26 @@ impl DerefMut for MovementTimer {
         &mut self.0
     }
 }
+
+#[derive(Resource)]
+pub struct TemporaryTimer(Timer);
+
+impl Default for TemporaryTimer {
+    fn default() -> Self {
+        Self(Timer::from_seconds(0.25, TimerMode::Once))
+    }
+}
+
+impl Deref for TemporaryTimer {
+    type Target = Timer;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for TemporaryTimer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}

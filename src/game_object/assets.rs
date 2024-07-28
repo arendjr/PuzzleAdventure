@@ -7,10 +7,13 @@ pub struct GameObjectAssets {
     pub blue_block: Handle<Image>,
     pub bouncing_ball: Handle<Image>,
     pub creature1: (Handle<Image>, Handle<TextureAtlasLayout>),
+    pub explosion: Handle<Image>,
     pub exit: Handle<Image>,
+    pub mine: Handle<Image>,
     pub player: Handle<Image>,
     pub raft: Handle<Image>,
     pub red_block: Handle<Image>,
+    pub splash: Handle<Image>,
     pub water: (Handle<Image>, Handle<TextureAtlasLayout>),
 }
 
@@ -42,12 +45,19 @@ impl GameObjectAssets {
                 one_by_four_atlas,
             ),
             exit: images.add(load_asset(include_bytes!("../../assets/sprites/exit.png"))),
+            explosion: images.add(load_asset(include_bytes!(
+                "../../assets/sprites/explosion.png"
+            ))),
+            mine: images.add(load_asset(include_bytes!("../../assets/sprites/mine.png"))),
             player: images.add(load_asset(include_bytes!(
                 "../../assets/sprites/player.png"
             ))),
             raft: images.add(load_asset(include_bytes!("../../assets/sprites/raft.png"))),
             red_block: images.add(load_asset(include_bytes!(
                 "../../assets/sprites/redblock.png"
+            ))),
+            splash: images.add(load_asset(include_bytes!(
+                "../../assets/sprites/splash.png"
             ))),
             water: (
                 images.add(load_asset(include_bytes!("../../assets/sprites/water.png"))),

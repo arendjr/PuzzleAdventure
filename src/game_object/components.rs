@@ -4,7 +4,7 @@ use bevy::prelude::*;
 
 use crate::errors::UnknownDirection;
 
-#[derive(Component, Debug, Eq, PartialEq)]
+#[derive(Clone, Component, Copy, Debug, Eq, PartialEq)]
 pub struct Position {
     pub x: i16,
     pub y: i16,
@@ -26,6 +26,24 @@ impl Direction {
             Self::Right => Self::Left,
             Self::Down => Self::Up,
             Self::Left => Self::Right,
+        }
+    }
+
+    pub fn left_hand(self) -> Self {
+        match self {
+            Self::Up => Self::Left,
+            Self::Right => Self::Up,
+            Self::Down => Self::Right,
+            Self::Left => Self::Down,
+        }
+    }
+
+    pub fn right_hand(self) -> Self {
+        match self {
+            Self::Up => Self::Right,
+            Self::Right => Self::Down,
+            Self::Down => Self::Left,
+            Self::Left => Self::Up,
         }
     }
 
@@ -67,12 +85,22 @@ pub struct Deadly;
 #[derive(Component)]
 pub struct Exit;
 
+/// Explodes on contact.
+///
+/// Should not be combined with [Deadly]. Dying is implied if the player
+/// explodes.
+#[derive(Component)]
+pub struct Explosive;
+
 /// A floatable entity will not sink when it comes into contact with a liquid.
 #[derive(Component)]
 pub struct Floatable;
 
-/// Liquid entities will cause other entities to sinkn when it comes into
+/// Liquid entities will cause other entities to sink when it comes into
 /// contact with them. An exception are [Floatable] entities.
+///
+/// Should not be combined with [Deadly]. Dying is implied if the player
+/// sinks.
 #[derive(Component)]
 pub struct Liquid;
 
@@ -106,3 +134,7 @@ pub struct Player;
 /// to move onto it.
 #[derive(Component)]
 pub struct Pushable;
+
+/// Automatically disappears after spawning.
+#[derive(Component)]
+pub struct Volatile;

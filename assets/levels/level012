@@ -28,10 +28,13 @@ Position=2,13;2,14;15,14;16,14;2,15;15,15;16,15
 Position=2,16;5,10;11,10;15,16;16,16
 
 [Creature1]
+Direction=Left
 Position=15,1
 
 [BouncingBall]
-Position=6,13;8,14;10,14
+Position=6,13
+Direction=Up
+Position=8,15;10,14
 
 [Mine]
 Position=16,8

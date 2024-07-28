@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use super::{
     assets::GameObjectAssets,
     components::{Exit, Liquid, Massive, Player, Position, Pushable},
-    Animatable, Deadly, Direction, Floatable, Movable,
+    Animatable, Deadly, Direction, Explosive, Floatable, Movable, Volatile,
 };
 
 #[derive(Bundle)]
@@ -22,7 +22,7 @@ impl BlueBlockBundle {
             pushable: Pushable,
             sprite: SpriteBundle {
                 texture: assets.blue_block.clone(),
-                transform: Transform::from_translation(Vec3::new(0., 0., 2.)),
+                transform: Transform::from_translation(Vec3::new(0., 0., 3.)),
                 ..Default::default()
             },
         }
@@ -106,6 +106,48 @@ impl ExitBundle {
 }
 
 #[derive(Bundle)]
+pub struct ExplosionBundle {
+    position: Position,
+    sprite: SpriteBundle,
+    volatile: Volatile,
+}
+
+impl ExplosionBundle {
+    pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
+        Self {
+            position,
+            sprite: SpriteBundle {
+                texture: assets.explosion.clone(),
+                transform: Transform::from_translation(Vec3::new(0., 0., 4.)),
+                ..Default::default()
+            },
+            volatile: Volatile,
+        }
+    }
+}
+
+#[derive(Bundle)]
+pub struct MineBundle {
+    explosive: Explosive,
+    position: Position,
+    sprite: SpriteBundle,
+}
+
+impl MineBundle {
+    pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
+        Self {
+            explosive: Explosive,
+            position,
+            sprite: SpriteBundle {
+                texture: assets.mine.clone(),
+                transform: Transform::from_translation(Vec3::new(0., 0., 1.)),
+                ..Default::default()
+            },
+        }
+    }
+}
+
+#[derive(Bundle)]
 pub struct PlayerBundle {
     player: Player,
     position: Position,
@@ -166,6 +208,29 @@ impl RedBlockBundle {
                 transform: Transform::from_translation(Vec3::new(0., 0., 2.)),
                 ..Default::default()
             },
+        }
+    }
+}
+
+#[derive(Bundle)]
+pub struct SplashBundle {
+    floatable: Floatable,
+    position: Position,
+    sprite: SpriteBundle,
+    volatile: Volatile,
+}
+
+impl SplashBundle {
+    pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
+        Self {
+            floatable: Floatable,
+            position,
+            sprite: SpriteBundle {
+                texture: assets.splash.clone(),
+                transform: Transform::from_translation(Vec3::new(0., 0., 4.)),
+                ..Default::default()
+            },
+            volatile: Volatile,
         }
     }
 }

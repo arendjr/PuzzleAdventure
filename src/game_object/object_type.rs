@@ -11,7 +11,7 @@ use super::{
         BlueBlockBundle, BouncingBallBundle, Creature1Bundle, ExitBundle, PlayerBundle, RaftBundle,
         RedBlockBundle, WaterBundle,
     },
-    Direction,
+    Direction, MineBundle,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -20,6 +20,7 @@ pub enum ObjectType {
     BouncingBall,
     Creature1,
     Exit,
+    Mine,
     Player,
     Raft,
     RedBlock,
@@ -35,6 +36,7 @@ impl FromStr for ObjectType {
             "BouncingBall" => Ok(Self::BouncingBall),
             "Creature1" => Ok(Self::Creature1),
             "Exit" => Ok(Self::Exit),
+            "Mine" => Ok(Self::Mine),
             "Player" => Ok(Self::Player),
             "Raft" => Ok(Self::Raft),
             "RedBlock" => Ok(Self::RedBlock),
@@ -60,6 +62,7 @@ pub fn spawn_object_of_type<'a>(
             commands.spawn(Creature1Bundle::spawn(assets, position, direction))
         }
         ObjectType::Exit => commands.spawn(ExitBundle::spawn(assets, position)),
+        ObjectType::Mine => commands.spawn(MineBundle::spawn(assets, position)),
         ObjectType::Player => commands.spawn(PlayerBundle::spawn(assets, position)),
         ObjectType::Raft => commands.spawn(RaftBundle::spawn(assets, position)),
         ObjectType::RedBlock => commands.spawn(RedBlockBundle::spawn(assets, position)),
