@@ -7,7 +7,7 @@ mod utils;
 
 use std::{cmp::Ordering, collections::BTreeMap};
 
-use bevy::prelude::*;
+use bevy::{prelude::*, window::WindowResized};
 use constants::GRID_SIZE;
 use game_object::{
     spawn_object_of_type, Animatable, Deadly, Direction, Exit, ExplosionBundle, Explosive,
@@ -32,11 +32,23 @@ struct PressedTriggers {
     num_pressed_triggers: usize,
 }
 
+#[derive(Resource)]
+struct Zoom {
+    factor: f32,
+}
+
+impl Default for Zoom {
+    fn default() -> Self {
+        Self { factor: 1.0 }
+    }
+}
+
 #[derive(Event)]
-enum LevelEvent {
-    Advance,
-    GoBack,
-    Reload,
+enum GameEvent {
+    ChangeZoom(f32),
+    LoadRelativeLevel(isize),
+    MovePlayer(i16, i16),
+    Exit,
 }
 
 fn main() {
@@ -55,9 +67,10 @@ fn main() {
         .init_resource::<MovementTimer>()
         .init_resource::<PressedTriggers>()
         .init_resource::<TemporaryTimer>()
-        .add_event::<LevelEvent>()
+        .init_resource::<Zoom>()
+        .add_event::<GameEvent>()
         .add_systems(Startup, setup)
-        .add_systems(Update, on_keyboard_input)
+        .add_systems(Update, (on_keyboard_input, on_resize_system))
         .add_systems(
             Update,
             (
@@ -88,49 +101,23 @@ fn main() {
         .run();
 }
 
-#[allow(clippy::type_complexity)]
-fn on_keyboard_input(
-    mut player_query: Query<&mut Position, With<Player>>,
-    mut collision_objects_query: Query<CollissionObject, Without<Player>>,
-    mut app_exit_events: EventWriter<AppExit>,
-    keys: Res<ButtonInput<KeyCode>>,
-    mut level_events: EventWriter<LevelEvent>,
-    dimensions: Res<Dimensions>,
-) {
-    let mut move_player = |dx, dy| {
-        for mut player_position in &mut player_query {
-            move_object(
-                &mut player_position,
-                (dx, dy),
-                &dimensions,
-                collision_objects_query.iter_mut(),
-                true,
-            );
-        }
-    };
-
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
+fn on_keyboard_input(keys: Res<ButtonInput<KeyCode>>, mut level_events: EventWriter<GameEvent>) {
     for key in keys.get_just_pressed() {
         use KeyCode::*;
         match key {
-            ArrowUp => move_player(0, -1),
-            ArrowRight => move_player(1, 0),
-            ArrowDown => move_player(0, 1),
-            ArrowLeft => move_player(-1, 0),
-            BracketRight => {
-                level_events.send(LevelEvent::Advance);
-            }
-            BracketLeft => {
-                level_events.send(LevelEvent::GoBack);
-            }
-            KeyR => {
-                level_events.send(LevelEvent::Reload);
-            }
-            Escape => {
-                app_exit_events.send(AppExit::Success);
-                break;
-            }
-            _ => {}
-        }
+            ArrowUp => level_events.send(GameEvent::MovePlayer(0, -1)),
+            ArrowRight => level_events.send(GameEvent::MovePlayer(1, 0)),
+            ArrowDown => level_events.send(GameEvent::MovePlayer(0, 1)),
+            ArrowLeft => level_events.send(GameEvent::MovePlayer(-1, 0)),
+            Equal => level_events.send(GameEvent::ChangeZoom(1.25)),
+            Minus => level_events.send(GameEvent::ChangeZoom(0.8)),
+            BracketRight => level_events.send(GameEvent::LoadRelativeLevel(1)),
+            BracketLeft => level_events.send(GameEvent::LoadRelativeLevel(-1)),
+            KeyR => level_events.send(GameEvent::LoadRelativeLevel(0)),
+            Escape => level_events.send(GameEvent::Exit),
+            _ => continue,
+        };
     }
 }
 
@@ -311,7 +298,7 @@ fn setup(
     mut images: ResMut<Assets<Image>>,
     mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
     mut game_object_assets: ResMut<GameObjectAssets>,
-    mut level_events: EventWriter<LevelEvent>,
+    mut level_events: EventWriter<GameEvent>,
 ) {
     commands.spawn(Camera2dBundle::default());
 
@@ -325,18 +312,18 @@ fn setup(
 
     *game_object_assets.as_mut() = GameObjectAssets::load(&mut images, &mut texture_atlas_layouts);
 
-    level_events.send(LevelEvent::Reload);
+    level_events.send(GameEvent::LoadRelativeLevel(0));
 }
 
 fn check_for_deadly(
     player_query: Query<&Position, With<Player>>,
     deadly_query: Query<&Position, With<Deadly>>,
-    mut level_events: EventWriter<LevelEvent>,
+    mut level_events: EventWriter<GameEvent>,
 ) {
     for player_position in &player_query {
         for deadly_position in &deadly_query {
             if player_position == deadly_position {
-                level_events.send(LevelEvent::Reload);
+                level_events.send(GameEvent::LoadRelativeLevel(0));
                 return;
             }
         }
@@ -346,12 +333,12 @@ fn check_for_deadly(
 fn check_for_exit(
     player_query: Query<&Position, With<Player>>,
     exit_query: Query<&Position, With<Exit>>,
-    mut level_events: EventWriter<LevelEvent>,
+    mut level_events: EventWriter<GameEvent>,
 ) {
     for player_position in &player_query {
         for exit_position in &exit_query {
             if player_position == exit_position {
-                level_events.send(LevelEvent::Advance);
+                level_events.send(GameEvent::LoadRelativeLevel(1));
                 return;
             }
         }
@@ -369,7 +356,7 @@ fn check_for_explosive(
     mut commands: Commands,
     explosive_query: Query<ExplosiveSystemObject>,
     background_query: Query<Entity, With<Background>>,
-    mut level_events: EventWriter<LevelEvent>,
+    mut level_events: EventWriter<GameEvent>,
     mut temporary_timer: ResMut<TemporaryTimer>,
     assets: Res<GameObjectAssets>,
 ) {
@@ -396,7 +383,7 @@ fn check_for_explosive(
                 }
 
                 if player.is_some() {
-                    level_events.send(LevelEvent::Reload);
+                    level_events.send(GameEvent::LoadRelativeLevel(0));
                 }
             }
         }
@@ -415,7 +402,7 @@ fn check_for_liquid(
     mut commands: Commands,
     liquid_query: Query<LiquidSystemObject>,
     background_query: Query<Entity, With<Background>>,
-    mut level_events: EventWriter<LevelEvent>,
+    mut level_events: EventWriter<GameEvent>,
     mut temporary_timer: ResMut<TemporaryTimer>,
     assets: Res<GameObjectAssets>,
 ) {
@@ -453,7 +440,7 @@ fn check_for_liquid(
                     }
 
                     if player.is_some() {
-                        level_events.send(LevelEvent::Reload);
+                        level_events.send(GameEvent::LoadRelativeLevel(0));
                     }
                 }
             }
@@ -518,59 +505,141 @@ fn check_for_triggers(
     pressed_triggers.num_pressed_triggers = num_pressed_triggers;
 }
 
+#[allow(clippy::too_many_arguments)]
 fn on_level_event(
     commands: Commands,
-    background_query: Query<Entity, With<Background>>,
-    mut level_events: EventReader<LevelEvent>,
+    mut background_query: Query<(Entity, &mut Transform), With<Background>>,
+    mut level_events: EventReader<GameEvent>,
     mut current_level: ResMut<CurrentLevel>,
+    mut player_query: Query<&mut Position, With<Player>>,
     mut pressed_triggers: ResMut<PressedTriggers>,
-    dimensions: ResMut<Dimensions>,
+    mut collision_objects_query: Query<CollissionObject, Without<Player>>,
+    mut app_exit_events: EventWriter<AppExit>,
+    mut dimensions: ResMut<Dimensions>,
+    mut zoom: ResMut<Zoom>,
+    window_query: Query<&Window>,
     assets: Res<GameObjectAssets>,
 ) {
     let mut level = None;
+    let mut player_position = None;
     for event in level_events.read() {
         match event {
-            LevelEvent::Advance => {
-                if current_level.level < LEVELS.len() - 1 {
-                    current_level.level += 1;
-                    level = Some(current_level.level);
-                }
+            GameEvent::ChangeZoom(factor) => {
+                zoom.factor *= factor;
+                player_position = Some(
+                    *player_query
+                        .get_single()
+                        .expect("there should be only one player"),
+                );
             }
-            LevelEvent::GoBack => {
-                current_level.level = current_level.level.saturating_sub(1);
+            GameEvent::LoadRelativeLevel(delta) => {
+                current_level.level = (current_level.level as isize + delta)
+                    .clamp(0, LEVELS.len() as isize - 1)
+                    as usize;
                 level = Some(current_level.level);
             }
-            LevelEvent::Reload => {
-                level = Some(current_level.level);
+            GameEvent::MovePlayer(dx, dy) => {
+                let mut position = player_query
+                    .get_single_mut()
+                    .expect("there should be only one player");
+                move_object(
+                    &mut position,
+                    (*dx, *dy),
+                    &dimensions,
+                    collision_objects_query.iter_mut(),
+                    true,
+                );
+                player_position = Some(*position);
+            }
+            GameEvent::Exit => {
+                app_exit_events.send(AppExit::Success);
             }
         }
     }
 
     if let Some(level) = level {
-        load_level(commands, level, background_query, dimensions, assets);
+        let (background_entity, _) = background_query
+            .get_single_mut()
+            .expect("there should be only one background");
+
         pressed_triggers.num_pressed_triggers = 0;
+
+        player_position = Some(load_level(
+            commands,
+            level,
+            background_entity,
+            &mut dimensions,
+            assets,
+        ));
+    }
+
+    if let Some(player_position) = player_position {
+        let (_, background_transform) = background_query
+            .get_single_mut()
+            .expect("there should be only one background");
+        let window = window_query
+            .get_single()
+            .expect("there should be only one window");
+
+        update_level_transform(
+            background_transform,
+            player_position,
+            &dimensions,
+            window.size(),
+            &zoom,
+        );
+    }
+}
+
+fn on_resize_system(
+    mut background_query: Query<&mut Transform, With<Background>>,
+    mut resize_reader: EventReader<WindowResized>,
+    player_query: Query<&Position, With<Player>>,
+    dimensions: Res<Dimensions>,
+    zoom: Res<Zoom>,
+) {
+    for event in resize_reader.read() {
+        let background_transform = background_query
+            .get_single_mut()
+            .expect("there should be only one background");
+        let player_position = player_query
+            .get_single()
+            .expect("there should be only one player");
+
+        update_level_transform(
+            background_transform,
+            *player_position,
+            &dimensions,
+            Vec2::new(event.width, event.height),
+            &zoom,
+        );
     }
 }
 
 fn load_level(
     mut commands: Commands,
     level: usize,
-    background_query: Query<Entity, With<Background>>,
-    mut dimensions: ResMut<Dimensions>,
+    background_entity: Entity,
+    dimensions: &mut Dimensions,
     assets: Res<GameObjectAssets>,
-) {
+) -> Position {
     let level = Level::load(LEVELS[level]);
+    let player_position = level
+        .objects
+        .get(&ObjectType::Player)
+        .and_then(|players| players.first())
+        .expect("Level didn't contain a player")
+        .position;
 
-    let background = background_query
-        .get_single()
-        .expect("there should be only one background");
-    let mut background = commands.entity(background);
+    let mut background = commands.entity(background_entity);
     background.despawn_descendants();
     background.with_children(|cb| {
         spawn_level_objects(cb, level.objects, &assets);
     });
 
-    *dimensions.as_mut() = level.dimensions;
+    *dimensions = level.dimensions;
+
+    player_position
 }
 
 fn spawn_level_objects(
@@ -593,4 +662,36 @@ fn spawn_level_objects(
             );
         }
     }
+}
+
+fn update_level_transform(
+    mut transform: Mut<Transform>,
+    player_position: Position,
+    dimensions: &Dimensions,
+    window_size: Vec2,
+    zoom: &Zoom,
+) {
+    transform.scale = Vec3::new(zoom.factor, zoom.factor, 1.);
+
+    let level_width = (dimensions.width * GRID_SIZE) as f32 * zoom.factor;
+    let x = if level_width > window_size.x {
+        let max = 0.5 * (level_width - window_size.x);
+        (zoom.factor
+            * ((-player_position.x as f32 + 0.5 * dimensions.width as f32) + 0.5)
+            * GRID_SIZE as f32)
+            .clamp(-max, max)
+    } else {
+        0.
+    };
+    let level_height = (dimensions.height * GRID_SIZE) as f32 * zoom.factor;
+    let y = if level_height > window_size.y {
+        let max = 0.5 * (level_height - window_size.y);
+        (zoom.factor
+            * ((player_position.y as f32 - 0.5 * dimensions.height as f32) - 0.5)
+            * GRID_SIZE as f32)
+            .clamp(-max, max)
+    } else {
+        0.
+    };
+    transform.translation = Vec3::new(x, y, 1.);
 }

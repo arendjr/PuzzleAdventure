@@ -130,10 +130,6 @@ impl Level {
             }
         }
 
-        if !objects.contains_key(&ObjectType::Player) {
-            println!("Warning: Level didn't contain a player");
-        }
-
         Self {
             dimensions,
             objects,
