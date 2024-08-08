@@ -17,7 +17,7 @@ use game_object::{
 use level::{Dimensions, InitialPositionAndDirection, Level, LEVELS};
 use rand::{thread_rng, Rng};
 use timers::{AnimationTimer, MovementTimer, TemporaryTimer};
-use utils::load_asset;
+use utils::load_repeating_asset;
 
 #[derive(Component)]
 struct Background;
@@ -316,7 +316,7 @@ fn setup(
     commands.spawn(Camera2dBundle::default());
 
     let background_sprite = SpriteBundle {
-        texture: images.add(load_asset(include_bytes!(
+        texture: images.add(load_repeating_asset(include_bytes!(
             "../assets/sprites/background.png"
         ))),
         ..Default::default()
