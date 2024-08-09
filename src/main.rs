@@ -8,7 +8,7 @@ mod utils;
 use std::{cmp::Ordering, collections::BTreeMap};
 
 use bevy::{prelude::*, window::WindowResized};
-use constants::GRID_SIZE;
+use constants::{BACKGROUND_SIZE, GRID_SIZE};
 use game_object::{
     spawn_object_of_type, Animatable, Deadly, Direction, Exit, ExplosionBundle, Explosive,
     Floatable, GameObjectAssets, Liquid, Massive, Movable, ObjectType, Openable, Player, Position,
@@ -55,7 +55,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                resolution: (768.0, 768.0).into(),
+                resolution: (BACKGROUND_SIZE, BACKGROUND_SIZE).into(),
                 ..default()
             }),
             ..default()
@@ -302,13 +302,19 @@ fn setup(
 ) {
     commands.spawn(Camera2dBundle::default());
 
-    let background_sprite = SpriteBundle {
-        texture: images.add(load_repeating_asset(include_bytes!(
-            "../assets/sprites/background.png"
-        ))),
-        ..Default::default()
-    };
-    commands.spawn((Background, background_sprite));
+    commands.spawn((
+        Background,
+        SpriteBundle {
+            texture: images.add(load_repeating_asset(include_bytes!(
+                "../assets/sprites/background.png"
+            ))),
+            ..Default::default()
+        },
+        TextureAtlas {
+            layout: Handle::default(),
+            index: 0,
+        },
+    ));
 
     *game_object_assets.as_mut() = GameObjectAssets::load(&mut images, &mut texture_atlas_layouts);
 
@@ -508,12 +514,13 @@ fn check_for_triggers(
 #[allow(clippy::too_many_arguments)]
 fn on_level_event(
     commands: Commands,
-    mut background_query: Query<(Entity, &mut Transform), With<Background>>,
+    mut background_query: Query<(Entity, &mut Transform, &mut TextureAtlas), With<Background>>,
     mut level_events: EventReader<GameEvent>,
     mut current_level: ResMut<CurrentLevel>,
     mut player_query: Query<&mut Position, With<Player>>,
     mut pressed_triggers: ResMut<PressedTriggers>,
     mut collision_objects_query: Query<CollissionObject, Without<Player>>,
+    mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
     mut app_exit_events: EventWriter<AppExit>,
     mut dimensions: ResMut<Dimensions>,
     mut zoom: ResMut<Zoom>,
@@ -558,7 +565,7 @@ fn on_level_event(
     }
 
     if let Some(level) = level {
-        let (background_entity, _) = background_query
+        let (background_entity, ..) = background_query
             .get_single_mut()
             .expect("there should be only one background");
 
@@ -574,12 +581,29 @@ fn on_level_event(
     }
 
     if let Some(player_position) = player_position {
-        let (_, background_transform) = background_query
+        let (_, background_transform, mut background_atlas) = background_query
             .get_single_mut()
             .expect("there should be only one background");
         let window = window_query
             .get_single()
             .expect("there should be only one window");
+
+        let mut layout = TextureAtlasLayout::new_empty(UVec2::new(
+            BACKGROUND_SIZE as u32,
+            BACKGROUND_SIZE as u32,
+        ));
+        let x =
+            (BACKGROUND_SIZE - dimensions.width * GRID_SIZE).clamp(0, BACKGROUND_SIZE) as u32 / 2;
+        let y =
+            (BACKGROUND_SIZE - dimensions.height * GRID_SIZE).clamp(0, BACKGROUND_SIZE) as u32 / 2;
+        let index = layout.add_texture(URect::new(
+            x,
+            y,
+            BACKGROUND_SIZE as u32 - x,
+            BACKGROUND_SIZE as u32 - y,
+        ));
+        background_atlas.layout = texture_atlas_layouts.add(layout);
+        background_atlas.index = index;
 
         update_level_transform(
             background_transform,
