@@ -16,6 +16,7 @@ bevy = { version = "0.14", default-features = false, features = [
     "bevy_render",
     "bevy_sprite",
     "bevy_text",
+    "bevy_ui",
     "jpeg",
     "png",
     "wayland",

@@ -1,5 +1,7 @@
 mod constants;
+mod editor;
 mod errors;
+mod fonts;
 mod game_object;
 mod level;
 mod timers;
@@ -8,7 +10,9 @@ mod utils;
 use std::{cmp::Ordering, collections::BTreeMap};
 
 use bevy::{prelude::*, window::WindowResized};
-use constants::{BACKGROUND_SIZE, GRID_SIZE};
+use constants::{BACKGROUND_SIZE, EDITOR_WIDTH, GRID_SIZE};
+use editor::{on_editor_number_input, Editor, EditorBundle};
+use fonts::Fonts;
 use game_object::{
     spawn_object_of_type, Animatable, Deadly, Direction, Exit, ExplosionBundle, Explosive,
     Floatable, GameObjectAssets, Liquid, Massive, Movable, ObjectType, Openable, Player, Position,
@@ -45,9 +49,12 @@ impl Default for Zoom {
 
 #[derive(Event)]
 enum GameEvent {
+    ChangeWidth(i16),
+    ChangeHeight(i16),
     ChangeZoom(f32),
     LoadRelativeLevel(isize),
     MovePlayer(i16, i16),
+    ToggleEditor,
     Exit,
 }
 
@@ -63,6 +70,7 @@ fn main() {
         .init_resource::<AnimationTimer>()
         .init_resource::<CurrentLevel>()
         .init_resource::<Dimensions>()
+        .init_resource::<Fonts>()
         .init_resource::<GameObjectAssets>()
         .init_resource::<MovementTimer>()
         .init_resource::<PressedTriggers>()
@@ -74,7 +82,8 @@ fn main() {
         .add_systems(
             Update,
             (
-                on_level_event,
+                on_game_event,
+                on_editor_number_input,
                 animate_objects,
                 move_objects,
                 check_for_deadly,
@@ -94,28 +103,28 @@ fn main() {
         .add_systems(
             Update,
             position_entities
-                .after(on_level_event)
+                .after(on_game_event)
                 .after(check_for_explosive)
                 .after(check_for_liquid),
         )
         .run();
 }
 
-#[allow(clippy::type_complexity, clippy::too_many_arguments)]
-fn on_keyboard_input(keys: Res<ButtonInput<KeyCode>>, mut level_events: EventWriter<GameEvent>) {
+fn on_keyboard_input(keys: Res<ButtonInput<KeyCode>>, mut events: EventWriter<GameEvent>) {
     for key in keys.get_just_pressed() {
         use KeyCode::*;
         match key {
-            ArrowUp => level_events.send(GameEvent::MovePlayer(0, -1)),
-            ArrowRight => level_events.send(GameEvent::MovePlayer(1, 0)),
-            ArrowDown => level_events.send(GameEvent::MovePlayer(0, 1)),
-            ArrowLeft => level_events.send(GameEvent::MovePlayer(-1, 0)),
-            Equal => level_events.send(GameEvent::ChangeZoom(1.25)),
-            Minus => level_events.send(GameEvent::ChangeZoom(0.8)),
-            BracketRight => level_events.send(GameEvent::LoadRelativeLevel(1)),
-            BracketLeft => level_events.send(GameEvent::LoadRelativeLevel(-1)),
-            KeyR => level_events.send(GameEvent::LoadRelativeLevel(0)),
-            Escape => level_events.send(GameEvent::Exit),
+            ArrowUp => events.send(GameEvent::MovePlayer(0, -1)),
+            ArrowRight => events.send(GameEvent::MovePlayer(1, 0)),
+            ArrowDown => events.send(GameEvent::MovePlayer(0, 1)),
+            ArrowLeft => events.send(GameEvent::MovePlayer(-1, 0)),
+            Equal => events.send(GameEvent::ChangeZoom(1.25)),
+            Minus => events.send(GameEvent::ChangeZoom(0.8)),
+            BracketRight => events.send(GameEvent::LoadRelativeLevel(1)),
+            BracketLeft => events.send(GameEvent::LoadRelativeLevel(-1)),
+            KeyE => events.send(GameEvent::ToggleEditor),
+            KeyR => events.send(GameEvent::LoadRelativeLevel(0)),
+            Escape => events.send(GameEvent::Exit),
             _ => continue,
         };
     }
@@ -295,17 +304,19 @@ fn despawn_volatile_objects(
 
 fn setup(
     mut commands: Commands,
-    mut images: ResMut<Assets<Image>>,
+    mut font_assets: ResMut<Assets<Font>>,
+    mut image_assets: ResMut<Assets<Image>>,
     mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
     mut game_object_assets: ResMut<GameObjectAssets>,
     mut level_events: EventWriter<GameEvent>,
+    mut fonts: ResMut<Fonts>,
 ) {
     commands.spawn(Camera2dBundle::default());
 
     commands.spawn((
         Background,
         SpriteBundle {
-            texture: images.add(load_repeating_asset(include_bytes!(
+            texture: image_assets.add(load_repeating_asset(include_bytes!(
                 "../assets/sprites/background.png"
             ))),
             ..Default::default()
@@ -316,7 +327,15 @@ fn setup(
         },
     ));
 
-    *game_object_assets.as_mut() = GameObjectAssets::load(&mut images, &mut texture_atlas_layouts);
+    *game_object_assets.as_mut() =
+        GameObjectAssets::load(&mut image_assets, &mut texture_atlas_layouts);
+
+    fonts.poppins_light = font_assets.add(
+        Font::try_from_bytes(Vec::from(include_bytes!(
+            "../assets/font/Poppins/Poppins-Light.ttf"
+        )))
+        .unwrap(),
+    );
 
     level_events.send(GameEvent::LoadRelativeLevel(0));
 }
@@ -512,9 +531,10 @@ fn check_for_triggers(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn on_level_event(
-    commands: Commands,
+fn on_game_event(
+    mut commands: Commands,
     mut background_query: Query<(Entity, &mut Transform, &mut TextureAtlas), With<Background>>,
+    editor_query: Query<Entity, With<Editor>>,
     mut level_events: EventReader<GameEvent>,
     mut current_level: ResMut<CurrentLevel>,
     mut player_query: Query<&mut Position, With<Player>>,
@@ -526,13 +546,35 @@ fn on_level_event(
     mut zoom: ResMut<Zoom>,
     window_query: Query<&Window>,
     assets: Res<GameObjectAssets>,
+    fonts: Res<Fonts>,
 ) {
     let mut level = None;
     let mut player_position = None;
+    let mut editor_open = editor_query.get_single().is_ok();
+
     for event in level_events.read() {
         match event {
+            GameEvent::ChangeHeight(delta) => {
+                dimensions.height += delta;
+
+                player_position = Some(
+                    *player_query
+                        .get_single()
+                        .expect("there should be only one player"),
+                );
+            }
+            GameEvent::ChangeWidth(delta) => {
+                dimensions.width += delta;
+
+                player_position = Some(
+                    *player_query
+                        .get_single()
+                        .expect("there should be only one player"),
+                );
+            }
             GameEvent::ChangeZoom(factor) => {
                 zoom.factor *= factor;
+
                 player_position = Some(
                     *player_query
                         .get_single()
@@ -557,6 +599,22 @@ fn on_level_event(
                     true,
                 );
                 player_position = Some(*position);
+            }
+            GameEvent::ToggleEditor => {
+                if let Ok(editor) = editor_query.get_single() {
+                    commands.entity(editor).despawn_recursive();
+                } else {
+                    commands
+                        .spawn(EditorBundle::new())
+                        .with_children(|cb| EditorBundle::populate(cb, &fonts));
+                }
+
+                editor_open = !editor_open;
+                player_position = Some(
+                    *player_query
+                        .get_single()
+                        .expect("there should be only one player"),
+                );
             }
             GameEvent::Exit => {
                 app_exit_events.send(AppExit::Success);
@@ -610,6 +668,7 @@ fn on_level_event(
             player_position,
             &dimensions,
             window.size(),
+            editor_open,
             &zoom,
         );
     }
@@ -619,6 +678,7 @@ fn on_resize_system(
     mut background_query: Query<&mut Transform, With<Background>>,
     mut resize_reader: EventReader<WindowResized>,
     player_query: Query<&Position, With<Player>>,
+    editor_query: Query<Entity, With<Editor>>,
     dimensions: Res<Dimensions>,
     zoom: Res<Zoom>,
 ) {
@@ -635,6 +695,7 @@ fn on_resize_system(
             *player_position,
             &dimensions,
             Vec2::new(event.width, event.height),
+            editor_query.get_single().is_ok(),
             &zoom,
         );
     }
@@ -693,13 +754,15 @@ fn update_level_transform(
     player_position: Position,
     dimensions: &Dimensions,
     window_size: Vec2,
+    editor_open: bool,
     zoom: &Zoom,
 ) {
     transform.scale = Vec3::new(zoom.factor, zoom.factor, 1.);
 
+    let editor_width = if editor_open { EDITOR_WIDTH as f32 } else { 0. };
     let level_width = (dimensions.width * GRID_SIZE) as f32 * zoom.factor;
-    let x = if level_width > window_size.x {
-        let max = 0.5 * (level_width - window_size.x);
+    let x = if level_width > window_size.x - editor_width {
+        let max = 0.5 * (level_width - (window_size.x - editor_width));
         (zoom.factor
             * ((-player_position.x as f32 + 0.5 * dimensions.width as f32) + 0.5)
             * GRID_SIZE as f32)
@@ -717,5 +780,5 @@ fn update_level_transform(
     } else {
         0.
     };
-    transform.translation = Vec3::new(x, y, 1.);
+    transform.translation = Vec3::new(x - if editor_open { 0.5 * editor_width } else { 0. }, y, 1.);
 }
