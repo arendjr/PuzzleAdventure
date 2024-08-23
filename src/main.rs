@@ -11,7 +11,7 @@ use std::{cmp::Ordering, collections::BTreeMap};
 
 use bevy::{prelude::*, window::WindowResized};
 use constants::{BACKGROUND_SIZE, EDITOR_WIDTH, GRID_SIZE};
-use editor::{on_editor_number_input, Editor, EditorBundle};
+use editor::{Editor, EditorBundle, EditorPlugin, SelectedObjectType};
 use fonts::Fonts;
 use game_object::{
     spawn_object_of_type, Animatable, Deadly, Direction, Exit, ExplosionBundle, Explosive,
@@ -58,15 +58,28 @@ enum GameEvent {
     Exit,
 }
 
+#[derive(Event)]
+enum EditorEvent {
+    Toggle,
+}
+
+#[derive(Event)]
+enum TransformEvent {
+    Update,
+}
+
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                resolution: (BACKGROUND_SIZE, BACKGROUND_SIZE).into(),
+        .add_plugins((
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    resolution: (BACKGROUND_SIZE, BACKGROUND_SIZE).into(),
+                    ..default()
+                }),
                 ..default()
             }),
-            ..default()
-        }))
+            EditorPlugin,
+        ))
         .init_resource::<AnimationTimer>()
         .init_resource::<CurrentLevel>()
         .init_resource::<Dimensions>()
@@ -76,14 +89,15 @@ fn main() {
         .init_resource::<PressedTriggers>()
         .init_resource::<TemporaryTimer>()
         .init_resource::<Zoom>()
+        .add_event::<EditorEvent>()
         .add_event::<GameEvent>()
+        .add_event::<TransformEvent>()
         .add_systems(Startup, setup)
         .add_systems(Update, (on_keyboard_input, on_resize_system))
         .add_systems(
             Update,
             (
                 on_game_event,
-                on_editor_number_input,
                 animate_objects,
                 move_objects,
                 check_for_deadly,
@@ -107,6 +121,11 @@ fn main() {
                 .after(check_for_explosive)
                 .after(check_for_liquid),
         )
+        .add_systems(
+            Update,
+            toggle_editor.after(on_game_event).after(on_resize_system),
+        )
+        .add_systems(Update, update_level_transform.after(toggle_editor))
         .run();
 }
 
@@ -532,9 +551,8 @@ fn check_for_triggers(
 
 #[allow(clippy::too_many_arguments)]
 fn on_game_event(
-    mut commands: Commands,
-    mut background_query: Query<(Entity, &mut Transform, &mut TextureAtlas), With<Background>>,
-    editor_query: Query<Entity, With<Editor>>,
+    commands: Commands,
+    mut background_query: Query<(Entity, &mut TextureAtlas), With<Background>>,
     mut level_events: EventReader<GameEvent>,
     mut current_level: ResMut<CurrentLevel>,
     mut player_query: Query<&mut Position, With<Player>>,
@@ -543,43 +561,30 @@ fn on_game_event(
     mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
     mut app_exit_events: EventWriter<AppExit>,
     mut dimensions: ResMut<Dimensions>,
+    mut selected_object_type: ResMut<SelectedObjectType>,
+    mut transform_writer: EventWriter<TransformEvent>,
     mut zoom: ResMut<Zoom>,
-    window_query: Query<&Window>,
+    mut editor_events: EventWriter<EditorEvent>,
+    editor_query: Query<Entity, With<Editor>>,
     assets: Res<GameObjectAssets>,
-    fonts: Res<Fonts>,
 ) {
     let mut level = None;
-    let mut player_position = None;
-    let mut editor_open = editor_query.get_single().is_ok();
+    let mut resize_background = false;
+    let mut update_transform = false;
 
     for event in level_events.read() {
         match event {
             GameEvent::ChangeHeight(delta) => {
                 dimensions.height += delta;
-
-                player_position = Some(
-                    *player_query
-                        .get_single()
-                        .expect("there should be only one player"),
-                );
+                resize_background = true;
             }
             GameEvent::ChangeWidth(delta) => {
                 dimensions.width += delta;
-
-                player_position = Some(
-                    *player_query
-                        .get_single()
-                        .expect("there should be only one player"),
-                );
+                resize_background = true;
             }
             GameEvent::ChangeZoom(factor) => {
                 zoom.factor *= factor;
-
-                player_position = Some(
-                    *player_query
-                        .get_single()
-                        .expect("there should be only one player"),
-                );
+                update_transform = true;
             }
             GameEvent::LoadRelativeLevel(delta) => {
                 current_level.level = (current_level.level as isize + delta)
@@ -598,26 +603,19 @@ fn on_game_event(
                     collision_objects_query.iter_mut(),
                     true,
                 );
-                player_position = Some(*position);
+                update_transform = true;
             }
             GameEvent::ToggleEditor => {
-                if let Ok(editor) = editor_query.get_single() {
-                    commands.entity(editor).despawn_recursive();
-                } else {
-                    commands
-                        .spawn(EditorBundle::new())
-                        .with_children(|cb| EditorBundle::populate(cb, &fonts));
-                }
-
-                editor_open = !editor_open;
-                player_position = Some(
-                    *player_query
-                        .get_single()
-                        .expect("there should be only one player"),
-                );
+                editor_events.send(EditorEvent::Toggle);
             }
             GameEvent::Exit => {
-                app_exit_events.send(AppExit::Success);
+                if selected_object_type.is_some() {
+                    **selected_object_type = None;
+                } else if editor_query.get_single().is_ok() {
+                    editor_events.send(EditorEvent::Toggle);
+                } else {
+                    app_exit_events.send(AppExit::Success);
+                }
             }
         }
     }
@@ -629,22 +627,15 @@ fn on_game_event(
 
         pressed_triggers.num_pressed_triggers = 0;
 
-        player_position = Some(load_level(
-            commands,
-            level,
-            background_entity,
-            &mut dimensions,
-            assets,
-        ));
+        load_level(commands, level, background_entity, &mut dimensions, assets);
+
+        resize_background = true;
     }
 
-    if let Some(player_position) = player_position {
-        let (_, background_transform, mut background_atlas) = background_query
+    if resize_background {
+        let (_, mut background_atlas) = background_query
             .get_single_mut()
             .expect("there should be only one background");
-        let window = window_query
-            .get_single()
-            .expect("there should be only one window");
 
         let mut layout = TextureAtlasLayout::new_empty(UVec2::new(
             BACKGROUND_SIZE as u32,
@@ -663,41 +654,20 @@ fn on_game_event(
         background_atlas.layout = texture_atlas_layouts.add(layout);
         background_atlas.index = index;
 
-        update_level_transform(
-            background_transform,
-            player_position,
-            &dimensions,
-            window.size(),
-            editor_open,
-            &zoom,
-        );
+        update_transform = true;
+    }
+
+    if update_transform {
+        transform_writer.send(TransformEvent::Update);
     }
 }
 
 fn on_resize_system(
-    mut background_query: Query<&mut Transform, With<Background>>,
     mut resize_reader: EventReader<WindowResized>,
-    player_query: Query<&Position, With<Player>>,
-    editor_query: Query<Entity, With<Editor>>,
-    dimensions: Res<Dimensions>,
-    zoom: Res<Zoom>,
+    mut transform_writer: EventWriter<TransformEvent>,
 ) {
-    for event in resize_reader.read() {
-        let background_transform = background_query
-            .get_single_mut()
-            .expect("there should be only one background");
-        let player_position = player_query
-            .get_single()
-            .expect("there should be only one player");
-
-        update_level_transform(
-            background_transform,
-            *player_position,
-            &dimensions,
-            Vec2::new(event.width, event.height),
-            editor_query.get_single().is_ok(),
-            &zoom,
-        );
+    if let Some(_event) = resize_reader.read().last() {
+        transform_writer.send(TransformEvent::Update);
     }
 }
 
@@ -707,14 +677,8 @@ fn load_level(
     background_entity: Entity,
     dimensions: &mut Dimensions,
     assets: Res<GameObjectAssets>,
-) -> Position {
+) {
     let level = Level::load(LEVELS[level]);
-    let player_position = level
-        .objects
-        .get(&ObjectType::Player)
-        .and_then(|players| players.first())
-        .expect("Level didn't contain a player")
-        .position;
 
     let mut background = commands.entity(background_entity);
     background.despawn_descendants();
@@ -723,8 +687,6 @@ fn load_level(
     });
 
     *dimensions = level.dimensions;
-
-    player_position
 }
 
 fn spawn_level_objects(
@@ -749,14 +711,65 @@ fn spawn_level_objects(
     }
 }
 
-fn update_level_transform(
-    mut transform: Mut<Transform>,
-    player_position: Position,
-    dimensions: &Dimensions,
-    window_size: Vec2,
-    editor_open: bool,
-    zoom: &Zoom,
+#[allow(clippy::too_many_arguments)]
+fn toggle_editor(
+    mut commands: Commands,
+    mut events: EventReader<EditorEvent>,
+    mut transform_writer: EventWriter<TransformEvent>,
+    mut movement_timer: ResMut<MovementTimer>,
+    mut selected_object_type: ResMut<SelectedObjectType>,
+    mut temporary_timer: ResMut<TemporaryTimer>,
+    editor_query: Query<Entity, With<Editor>>,
+    assets: Res<GameObjectAssets>,
+    fonts: Res<Fonts>,
 ) {
+    let Some(_event) = events.read().last() else {
+        return;
+    };
+
+    if let Ok(editor) = editor_query.get_single() {
+        commands.entity(editor).despawn_recursive();
+        **selected_object_type = None;
+
+        movement_timer.unpause();
+        temporary_timer.unpause();
+    } else {
+        commands
+            .spawn(EditorBundle::new())
+            .with_children(|cb| EditorBundle::populate(cb, &assets, &fonts));
+
+        movement_timer.pause();
+        temporary_timer.pause();
+    }
+
+    transform_writer.send(TransformEvent::Update);
+}
+
+fn update_level_transform(
+    mut events: EventReader<TransformEvent>,
+    mut background_query: Query<&mut Transform, With<Background>>,
+    player_query: Query<&Position, With<Player>>,
+    editor_query: Query<Entity, With<Editor>>,
+    dimensions: Res<Dimensions>,
+    window_query: Query<&Window>,
+    zoom: Res<Zoom>,
+) {
+    let Some(_event) = events.read().last() else {
+        return;
+    };
+
+    let editor_open = editor_query.get_single().is_ok();
+    let player_position = player_query
+        .get_single()
+        .expect("there should be only one player");
+    let mut transform = background_query
+        .get_single_mut()
+        .expect("there should be only one background");
+    let window = window_query
+        .get_single()
+        .expect("there should be only one window");
+    let window_size = window.size();
+
     transform.scale = Vec3::new(zoom.factor, zoom.factor, 1.);
 
     let editor_width = if editor_open { EDITOR_WIDTH as f32 } else { 0. };

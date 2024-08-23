@@ -8,6 +8,7 @@ pub struct GameObjectAssets {
     pub bouncing_ball: Handle<Image>,
     pub button: Handle<Image>,
     pub creature1: (Handle<Image>, Handle<TextureAtlasLayout>),
+    pub eraser: Handle<Image>,
     pub explosion: Handle<Image>,
     pub exit: Handle<Image>,
     pub gate: (Handle<Image>, Handle<TextureAtlasLayout>),
@@ -53,6 +54,9 @@ impl GameObjectAssets {
                 ))),
                 one_by_four_atlas,
             ),
+            eraser: images.add(load_asset(include_bytes!(
+                "../../assets/sprites/eraser.png"
+            ))),
             exit: images.add(load_asset(include_bytes!("../../assets/sprites/exit.png"))),
             explosion: images.add(load_asset(include_bytes!(
                 "../../assets/sprites/explosion.png"

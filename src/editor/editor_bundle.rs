@@ -3,9 +3,9 @@ use bevy::{
     prelude::*,
 };
 
-use crate::{constants::EDITOR_WIDTH, fonts::Fonts};
+use crate::{constants::*, fonts::Fonts, game_object::GameObjectAssets};
 
-use super::number_input::NumberInputBundle;
+use super::{number_input::NumberInputBundle, ObjectSelectorBundle};
 
 const BORDER_WIDTH: f32 = 2.;
 
@@ -32,12 +32,13 @@ impl EditorBundle {
                     width: Val::Px(EDITOR_WIDTH as f32 - BORDER_WIDTH),
                     height: Val::Percent(100.),
                     border: UiRect::left(Val::Px(BORDER_WIDTH)),
-                    padding: UiRect::all(Val::Px(20.)),
+                    padding: UiRect::all(Val::Px(EDITOR_PADDING as f32)),
                     flex_direction: FlexDirection::Column,
-                    align_items: AlignItems::Start,
-                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Start,
                     right: Val::Px(0.),
                     position_type: PositionType::Absolute,
+                    row_gap: Val::Px(EDITOR_PADDING as f32),
                     ..Default::default()
                 },
                 background_color: GRAY_900.into(),
@@ -49,11 +50,14 @@ impl EditorBundle {
         }
     }
 
-    pub fn populate(cb: &mut ChildBuilder, fonts: &Fonts) {
+    pub fn populate(cb: &mut ChildBuilder, assets: &GameObjectAssets, fonts: &Fonts) {
         cb.spawn(NumberInputBundle::new())
             .with_children(|cb| NumberInputBundle::populate(cb, Input::Width, "Width", fonts));
 
         cb.spawn(NumberInputBundle::new())
             .with_children(|cb| NumberInputBundle::populate(cb, Input::Height, "Height", fonts));
+
+        cb.spawn(ObjectSelectorBundle::new())
+            .with_children(|cb| ObjectSelectorBundle::populate(cb, assets));
     }
 }
