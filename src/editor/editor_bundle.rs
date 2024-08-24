@@ -5,7 +5,11 @@ use bevy::{
 
 use crate::{constants::*, fonts::Fonts, game_object::GameObjectAssets, level::Dimensions};
 
-use super::{number_input::NumberInputBundle, ObjectSelectorBundle};
+use super::{
+    button::{Button, EditorButtonBundle},
+    number_input::NumberInputBundle,
+    ObjectSelectorBundle,
+};
 
 const BORDER_WIDTH: f32 = 2.;
 
@@ -66,5 +70,8 @@ impl EditorBundle {
 
         cb.spawn(ObjectSelectorBundle::new())
             .with_children(|cb| ObjectSelectorBundle::populate(cb, assets));
+
+        cb.spawn(EditorButtonBundle::new(Button::Save))
+            .with_children(|cb| EditorButtonBundle::populate(cb, "Save", fonts));
     }
 }

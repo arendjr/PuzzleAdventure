@@ -1,3 +1,4 @@
+mod button;
 mod editor_bundle;
 mod editor_system;
 mod number_input;
@@ -18,7 +19,8 @@ impl Plugin for EditorPlugin {
             Update,
             (
                 on_dimensions_changed,
-                on_editor_number_input,
+                on_editor_button_interaction,
+                on_editor_number_input_interaction,
                 on_object_selector_input,
                 on_selected_object_change,
                 spawn_selected_object,

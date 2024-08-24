@@ -11,12 +11,37 @@ use crate::{
     constants::GRID_SIZE,
     game_object::{spawn_object_of_type, GameObjectAssets, Position},
     level::Dimensions,
-    Background, GameEvent,
+    Background, GameEvent, SaveLevelEvent,
 };
 
-use super::{number_input::NumberInput, Input, SelectedObjectType};
+use super::{button::Button, number_input::NumberInput, Input, SelectedObjectType};
 
-pub fn on_editor_number_input(
+pub fn on_editor_button_interaction(
+    mut interaction_query: Query<
+        (&Interaction, &Button, &mut BackgroundColor),
+        Changed<Interaction>,
+    >,
+    mut events: EventWriter<SaveLevelEvent>,
+) {
+    for (interaction, button, mut color) in &mut interaction_query {
+        match *interaction {
+            Interaction::Pressed => {
+                *color = WHITE.into();
+                events.send(match button {
+                    Button::Save => SaveLevelEvent::Save,
+                });
+            }
+            Interaction::Hovered => {
+                *color = GRAY_600.into();
+            }
+            Interaction::None => {
+                *color = GRAY_950.into();
+            }
+        }
+    }
+}
+
+pub fn on_editor_number_input_interaction(
     mut interaction_query: Query<
         (&Interaction, &Input, &NumberInput, &mut BackgroundColor),
         Changed<Interaction>,
@@ -100,14 +125,13 @@ pub fn spawn_selected_object(
         .get_single()
         .expect("there should be only one background");
 
-    let x = (((cursor_position.x - (0.5 * window_size.x + transform.translation.x))
-        / GRID_SIZE as f32)
-        / transform.scale.x
+    let center_x = 0.5 * window_size.x + transform.translation.x;
+    let x = ((cursor_position.x - center_x) / (transform.scale.x * GRID_SIZE as f32)
         + 0.5 * dimensions.width as f32) as i16
         + 1;
-    let y = (((cursor_position.y - (0.5 * window_size.y - transform.translation.y))
-        / GRID_SIZE as f32)
-        / transform.scale.y
+
+    let center_y = 0.5 * window_size.y - transform.translation.y;
+    let y = ((cursor_position.y - center_y) / (transform.scale.y * GRID_SIZE as f32)
         + 0.5 * dimensions.height as f32) as i16
         + 1;
 

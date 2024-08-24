@@ -1,4 +1,5 @@
 use std::{
+    cmp::Ordering,
     collections::{btree_map::Entry, BTreeMap},
     str::FromStr,
 };
@@ -25,7 +26,7 @@ pub const LEVELS: &[&str] = &[
     include_str!("../assets/levels/level015"),
 ];
 
-#[derive(Resource)]
+#[derive(Clone, Copy, Resource)]
 pub struct Dimensions {
     pub width: i16,
     pub height: i16,
@@ -134,5 +135,38 @@ impl Level {
             dimensions,
             objects,
         }
+    }
+
+    pub fn save(self) -> String {
+        let Dimensions { width, height } = self.dimensions;
+
+        let mut content = format!("[General]\nWidth={width}\nHeight={height}\n");
+
+        for (object_type, mut positions) in self.objects {
+            content.push_str(&format!("\n[{object_type}]\n"));
+
+            positions.sort_unstable_by(|a, b| match a.direction.cmp(&b.direction) {
+                Ordering::Equal => a.position.cmp(&b.position),
+                ordering => ordering,
+            });
+
+            let mut current_direction = Direction::default();
+            for InitialPositionAndDirection {
+                position,
+                direction,
+            } in positions
+            {
+                if let Some(direction) = direction {
+                    if direction != current_direction {
+                        content.push_str(&format!("Direction={direction}\n"));
+                        current_direction = direction;
+                    }
+                }
+
+                content.push_str(&format!("Position={position}\n"));
+            }
+        }
+
+        content
     }
 }

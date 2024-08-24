@@ -3,11 +3,13 @@ use bevy::prelude::*;
 use super::{
     assets::GameObjectAssets,
     components::{Exit, Liquid, Massive, Player, Position, Pushable},
-    Animatable, Deadly, Direction, Explosive, Floatable, Movable, Openable, Trigger, Volatile,
+    Animatable, Deadly, Direction, Explosive, Floatable, Movable, ObjectType, Openable, Trigger,
+    Volatile,
 };
 
 #[derive(Bundle)]
 pub struct BlueBlockBundle {
+    object_type: ObjectType,
     massive: Massive,
     position: Position,
     pushable: Pushable,
@@ -17,6 +19,7 @@ pub struct BlueBlockBundle {
 impl BlueBlockBundle {
     pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
         Self {
+            object_type: ObjectType::BlueBlock,
             massive: Massive,
             position,
             pushable: Pushable,
@@ -31,6 +34,7 @@ impl BlueBlockBundle {
 
 #[derive(Bundle)]
 pub struct BouncingBallBundle {
+    object_type: ObjectType,
     deadly: Deadly,
     direction: Direction,
     movable: Movable,
@@ -41,6 +45,7 @@ pub struct BouncingBallBundle {
 impl BouncingBallBundle {
     pub fn spawn(assets: &GameObjectAssets, position: Position, direction: Direction) -> Self {
         Self {
+            object_type: ObjectType::BouncingBall,
             deadly: Deadly,
             direction,
             movable: Movable::Bounce,
@@ -56,6 +61,7 @@ impl BouncingBallBundle {
 
 #[derive(Bundle)]
 pub struct ButtonBundle {
+    object_type: ObjectType,
     position: Position,
     sprite: SpriteBundle,
     trigger: Trigger,
@@ -64,6 +70,7 @@ pub struct ButtonBundle {
 impl ButtonBundle {
     pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
         Self {
+            object_type: ObjectType::Button,
             position,
             sprite: SpriteBundle {
                 texture: assets.button.clone(),
@@ -77,6 +84,7 @@ impl ButtonBundle {
 
 #[derive(Bundle)]
 pub struct Creature1Bundle {
+    object_type: ObjectType,
     atlas: TextureAtlas,
     deadly: Deadly,
     direction: Direction,
@@ -88,6 +96,7 @@ pub struct Creature1Bundle {
 impl Creature1Bundle {
     pub fn spawn(assets: &GameObjectAssets, position: Position, direction: Direction) -> Self {
         Self {
+            object_type: ObjectType::Creature1,
             atlas: TextureAtlas {
                 layout: assets.creature1.1.clone(),
                 index: direction as usize,
@@ -107,6 +116,7 @@ impl Creature1Bundle {
 
 #[derive(Bundle)]
 pub struct ExitBundle {
+    object_type: ObjectType,
     exit: Exit,
     position: Position,
     sprite: SpriteBundle,
@@ -115,6 +125,7 @@ pub struct ExitBundle {
 impl ExitBundle {
     pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
         Self {
+            object_type: ObjectType::Exit,
             exit: Exit,
             position,
             sprite: SpriteBundle {
@@ -149,6 +160,7 @@ impl ExplosionBundle {
 
 #[derive(Bundle)]
 pub struct GateBundle {
+    object_type: ObjectType,
     atlas: TextureAtlas,
     openable: Openable,
     massive: Massive,
@@ -159,6 +171,7 @@ pub struct GateBundle {
 impl GateBundle {
     pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
         Self {
+            object_type: ObjectType::Gate,
             atlas: TextureAtlas {
                 layout: assets.gate.1.clone(),
                 index: 0,
@@ -177,6 +190,7 @@ impl GateBundle {
 
 #[derive(Bundle)]
 pub struct MineBundle {
+    object_type: ObjectType,
     explosive: Explosive,
     position: Position,
     sprite: SpriteBundle,
@@ -185,6 +199,7 @@ pub struct MineBundle {
 impl MineBundle {
     pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
         Self {
+            object_type: ObjectType::Mine,
             explosive: Explosive,
             position,
             sprite: SpriteBundle {
@@ -198,6 +213,7 @@ impl MineBundle {
 
 #[derive(Bundle)]
 pub struct PlayerBundle {
+    object_type: ObjectType,
     player: Player,
     position: Position,
     sprite: SpriteBundle,
@@ -206,6 +222,7 @@ pub struct PlayerBundle {
 impl PlayerBundle {
     pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
         Self {
+            object_type: ObjectType::Player,
             player: Player,
             position,
             sprite: SpriteBundle {
@@ -219,6 +236,7 @@ impl PlayerBundle {
 
 #[derive(Bundle)]
 pub struct RaftBundle {
+    object_type: ObjectType,
     floatable: Floatable,
     position: Position,
     pushable: Pushable,
@@ -228,6 +246,7 @@ pub struct RaftBundle {
 impl RaftBundle {
     pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
         Self {
+            object_type: ObjectType::Raft,
             floatable: Floatable,
             position,
             pushable: Pushable,
@@ -242,6 +261,7 @@ impl RaftBundle {
 
 #[derive(Bundle)]
 pub struct RedBlockBundle {
+    object_type: ObjectType,
     massive: Massive,
     position: Position,
     sprite: SpriteBundle,
@@ -250,6 +270,7 @@ pub struct RedBlockBundle {
 impl RedBlockBundle {
     pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
         Self {
+            object_type: ObjectType::RedBlock,
             massive: Massive,
             position,
             sprite: SpriteBundle {
@@ -286,6 +307,7 @@ impl SplashBundle {
 
 #[derive(Bundle)]
 pub struct WaterBundle {
+    object_type: ObjectType,
     animatable: Animatable,
     atlas: TextureAtlas,
     liquid: Liquid,
@@ -296,6 +318,7 @@ pub struct WaterBundle {
 impl WaterBundle {
     pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
         Self {
+            object_type: ObjectType::Water,
             animatable: Animatable { num_frames: 3 },
             atlas: TextureAtlas {
                 layout: assets.water.1.clone(),

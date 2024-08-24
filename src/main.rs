@@ -7,7 +7,7 @@ mod level;
 mod timers;
 mod utils;
 
-use std::{cmp::Ordering, collections::BTreeMap};
+use std::{borrow::Cow, cmp::Ordering, collections::BTreeMap};
 
 use bevy::{prelude::*, window::WindowResized};
 use constants::{BACKGROUND_SIZE, EDITOR_WIDTH, GRID_SIZE, HALF_GRID_SIZE};
@@ -26,9 +26,19 @@ use utils::load_repeating_asset;
 #[derive(Component)]
 struct Background;
 
-#[derive(Default, Resource)]
-struct CurrentLevel {
-    level: usize,
+#[derive(Resource)]
+struct Levels {
+    current_level: usize,
+    levels: Vec<Cow<'static, str>>,
+}
+
+impl Default for Levels {
+    fn default() -> Self {
+        Self {
+            current_level: 0,
+            levels: LEVELS.iter().map(|c| (*c).into()).collect(),
+        }
+    }
 }
 
 #[derive(Default, Resource)]
@@ -64,6 +74,11 @@ enum EditorEvent {
 }
 
 #[derive(Event)]
+enum SaveLevelEvent {
+    Save,
+}
+
+#[derive(Event)]
 enum TransformEvent {
     Update,
 }
@@ -81,19 +96,20 @@ fn main() {
             EditorPlugin,
         ))
         .init_resource::<AnimationTimer>()
-        .init_resource::<CurrentLevel>()
         .init_resource::<Dimensions>()
         .init_resource::<Fonts>()
         .init_resource::<GameObjectAssets>()
+        .init_resource::<Levels>()
         .init_resource::<MovementTimer>()
         .init_resource::<PressedTriggers>()
         .init_resource::<TemporaryTimer>()
         .init_resource::<Zoom>()
         .add_event::<EditorEvent>()
         .add_event::<GameEvent>()
+        .add_event::<SaveLevelEvent>()
         .add_event::<TransformEvent>()
         .add_systems(Startup, setup)
-        .add_systems(Update, (on_keyboard_input, on_resize_system))
+        .add_systems(Update, (on_keyboard_input, on_resize_system, save_level))
         .add_systems(
             Update,
             (
@@ -114,19 +130,27 @@ fn main() {
                 .after(on_keyboard_input)
                 .after(move_objects),
         )
+        .add_systems(Update, load_level.after(on_game_event).after(save_level))
         .add_systems(
             Update,
             position_entities
-                .after(on_game_event)
+                .after(load_level)
                 .after(check_for_explosive)
                 .after(check_for_liquid)
                 .after(spawn_selected_object),
         )
         .add_systems(
             Update,
-            toggle_editor.after(on_game_event).after(on_resize_system),
+            (resize_background, toggle_editor)
+                .after(load_level)
+                .after(on_resize_system),
         )
-        .add_systems(Update, update_level_transform.after(toggle_editor))
+        .add_systems(
+            Update,
+            update_level_transform
+                .after(toggle_editor)
+                .after(resize_background),
+        )
         .run();
 }
 
@@ -550,50 +574,38 @@ fn check_for_triggers(
 
 #[allow(clippy::too_many_arguments)]
 fn on_game_event(
-    commands: Commands,
-    mut background_query: Query<(Entity, &mut TextureAtlas), With<Background>>,
-    mut level_events: EventReader<GameEvent>,
-    mut current_level: ResMut<CurrentLevel>,
-    mut player_query: Query<&mut Position, With<Player>>,
-    mut pressed_triggers: ResMut<PressedTriggers>,
-    mut collision_objects_query: Query<CollissionObject, Without<Player>>,
-    mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
     mut app_exit_events: EventWriter<AppExit>,
+    mut collision_objects_query: Query<CollissionObject, Without<Player>>,
     mut dimensions: ResMut<Dimensions>,
-    mut selected_object_type: ResMut<SelectedObjectType>,
-    mut transform_writer: EventWriter<TransformEvent>,
-    mut zoom: ResMut<Zoom>,
     mut editor_events: EventWriter<EditorEvent>,
+    mut level_events: EventReader<GameEvent>,
+    mut levels: ResMut<Levels>,
+    mut player_query: Query<&mut Position, With<Player>>,
+    mut selected_object_type: ResMut<SelectedObjectType>,
+    mut transform_events: EventWriter<TransformEvent>,
+    mut zoom: ResMut<Zoom>,
     editor_query: Query<Entity, With<Editor>>,
-    assets: Res<GameObjectAssets>,
 ) {
-    let mut level = None;
-    let mut resize_background = false;
-    let mut update_transform = false;
-
     for event in level_events.read() {
         match event {
             GameEvent::ChangeHeight(delta) => {
                 if dimensions.height + delta > 0 {
                     dimensions.height += delta;
-                    resize_background = true;
                 }
             }
             GameEvent::ChangeWidth(delta) => {
                 if dimensions.width + delta > 0 {
                     dimensions.width += delta;
-                    resize_background = true;
                 }
             }
             GameEvent::ChangeZoom(factor) => {
                 zoom.factor *= factor;
-                update_transform = true;
+                transform_events.send(TransformEvent::Update);
             }
             GameEvent::LoadRelativeLevel(delta) => {
-                current_level.level = (current_level.level as isize + delta)
-                    .clamp(0, LEVELS.len() as isize - 1)
+                levels.current_level = (levels.current_level as isize + delta)
+                    .clamp(0, levels.levels.len() as isize - 1)
                     as usize;
-                level = Some(current_level.level);
             }
             GameEvent::MovePlayer(dx, dy) => {
                 let mut position = player_query
@@ -606,7 +618,7 @@ fn on_game_event(
                     collision_objects_query.iter_mut(),
                     true,
                 );
-                update_transform = true;
+                transform_events.send(TransformEvent::Update);
             }
             GameEvent::ToggleEditor => {
                 editor_events.send(EditorEvent::Toggle);
@@ -622,66 +634,64 @@ fn on_game_event(
             }
         }
     }
+}
 
-    if let Some(level) = level {
-        let (background_entity, ..) = background_query
-            .get_single_mut()
-            .expect("there should be only one background");
-
-        pressed_triggers.num_pressed_triggers = 0;
-
-        load_level(commands, level, background_entity, &mut dimensions, assets);
-
-        resize_background = true;
+fn resize_background(
+    mut background_query: Query<&mut TextureAtlas, With<Background>>,
+    mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
+    mut transform_events: EventWriter<TransformEvent>,
+    dimensions: Res<Dimensions>,
+) {
+    if !dimensions.is_changed() {
+        return;
     }
 
-    if resize_background {
-        let (_, mut background_atlas) = background_query
-            .get_single_mut()
-            .expect("there should be only one background");
+    let mut background_atlas = background_query
+        .get_single_mut()
+        .expect("there should be only one background");
 
-        let mut layout = TextureAtlasLayout::new_empty(UVec2::new(
-            BACKGROUND_SIZE as u32,
-            BACKGROUND_SIZE as u32,
-        ));
-        let x =
-            (BACKGROUND_SIZE - dimensions.width * GRID_SIZE).clamp(0, BACKGROUND_SIZE) as u32 / 2;
-        let y =
-            (BACKGROUND_SIZE - dimensions.height * GRID_SIZE).clamp(0, BACKGROUND_SIZE) as u32 / 2;
-        let index = layout.add_texture(URect::new(
-            x,
-            y,
-            BACKGROUND_SIZE as u32 - x,
-            BACKGROUND_SIZE as u32 - y,
-        ));
-        background_atlas.layout = texture_atlas_layouts.add(layout);
-        background_atlas.index = index;
+    let mut layout =
+        TextureAtlasLayout::new_empty(UVec2::new(BACKGROUND_SIZE as u32, BACKGROUND_SIZE as u32));
+    let x = (BACKGROUND_SIZE - dimensions.width * GRID_SIZE).clamp(0, BACKGROUND_SIZE) as u32 / 2;
+    let y = (BACKGROUND_SIZE - dimensions.height * GRID_SIZE).clamp(0, BACKGROUND_SIZE) as u32 / 2;
+    let index = layout.add_texture(URect::new(
+        x,
+        y,
+        BACKGROUND_SIZE as u32 - x,
+        BACKGROUND_SIZE as u32 - y,
+    ));
+    background_atlas.layout = texture_atlas_layouts.add(layout);
+    background_atlas.index = index;
 
-        update_transform = true;
-    }
-
-    if update_transform {
-        transform_writer.send(TransformEvent::Update);
-    }
+    transform_events.send(TransformEvent::Update);
 }
 
 fn on_resize_system(
     mut resize_reader: EventReader<WindowResized>,
-    mut transform_writer: EventWriter<TransformEvent>,
+    mut transform_events: EventWriter<TransformEvent>,
 ) {
     if let Some(_event) = resize_reader.read().last() {
-        transform_writer.send(TransformEvent::Update);
+        transform_events.send(TransformEvent::Update);
     }
 }
 
 fn load_level(
     mut commands: Commands,
-    level: usize,
-    background_entity: Entity,
-    dimensions: &mut Dimensions,
+    mut background_query: Query<Entity, With<Background>>,
+    mut dimensions: ResMut<Dimensions>,
+    mut pressed_triggers: ResMut<PressedTriggers>,
     assets: Res<GameObjectAssets>,
+    levels: Res<Levels>,
 ) {
-    let level = Level::load(LEVELS[level]);
+    if !levels.is_changed() {
+        return;
+    }
+
+    let level = Level::load(&levels.levels[levels.current_level]);
+
+    let background_entity = background_query
+        .get_single_mut()
+        .expect("there should be only one background");
 
     let mut background = commands.entity(background_entity);
     background.despawn_descendants();
@@ -689,7 +699,49 @@ fn load_level(
         spawn_level_objects(cb, level.objects, &assets);
     });
 
+    pressed_triggers.num_pressed_triggers = 0;
+
     *dimensions = level.dimensions;
+}
+
+fn save_level(
+    mut events: EventReader<SaveLevelEvent>,
+    mut levels: ResMut<Levels>,
+    dimensions: Res<Dimensions>,
+    objects_query: Query<(&ObjectType, &Position, Option<&Direction>)>,
+) {
+    let Some(_event) = events.read().last() else {
+        return;
+    };
+
+    let mut objects = BTreeMap::new();
+    for (object_type, position, direction) in &objects_query {
+        if position.x > 0
+            && position.x <= dimensions.width
+            && position.y > 0
+            && position.y <= dimensions.height
+        {
+            let positions = objects.entry(*object_type).or_insert(Vec::new());
+            positions.push(InitialPositionAndDirection {
+                position: *position,
+                direction: direction.copied(),
+            });
+        }
+    }
+
+    if !objects
+        .get(&ObjectType::Player)
+        .is_some_and(|player_locations| player_locations.len() == 1)
+    {
+        return; // Only save levels with exactly one player.
+    }
+
+    let level = Level {
+        dimensions: *dimensions,
+        objects,
+    };
+    let current_level = levels.current_level;
+    levels.levels[current_level] = level.save().into()
 }
 
 fn spawn_level_objects(
@@ -718,7 +770,7 @@ fn spawn_level_objects(
 fn toggle_editor(
     mut commands: Commands,
     mut events: EventReader<EditorEvent>,
-    mut transform_writer: EventWriter<TransformEvent>,
+    mut transform_events: EventWriter<TransformEvent>,
     mut movement_timer: ResMut<MovementTimer>,
     mut selected_object_type: ResMut<SelectedObjectType>,
     mut temporary_timer: ResMut<TemporaryTimer>,
@@ -746,7 +798,7 @@ fn toggle_editor(
         temporary_timer.pause();
     }
 
-    transform_writer.send(TransformEvent::Update);
+    transform_events.send(TransformEvent::Update);
 }
 
 fn update_level_transform(

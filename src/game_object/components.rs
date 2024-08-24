@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{fmt::Display, str::FromStr};
 
 use bevy::prelude::*;
 
@@ -7,7 +7,7 @@ use crate::errors::UnknownDirection;
 /// Game object position.
 ///
 /// The top-left square of a level is position (1, 1).
-#[derive(Clone, Component, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Component, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Position {
     /// 1-based X coordinate of the object's position.
     pub x: i16,
@@ -16,13 +16,30 @@ pub struct Position {
     pub y: i16,
 }
 
-#[derive(Clone, Component, Copy, Debug, Default, Eq, PartialEq)]
+impl Display for Position {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{},{}", self.x, self.y))
+    }
+}
+
+#[derive(Clone, Component, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Direction {
     #[default]
     Up,
     Right,
     Down,
     Left,
+}
+
+impl Display for Direction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Up => "Up",
+            Self::Right => "Right",
+            Self::Down => "Down",
+            Self::Left => "Left",
+        })
+    }
 }
 
 impl Direction {

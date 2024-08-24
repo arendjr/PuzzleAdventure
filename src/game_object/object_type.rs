@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::str::FromStr;
 
 use bevy::{ecs::system::EntityCommands, prelude::*};
@@ -14,7 +15,7 @@ use super::{
     ButtonBundle, Direction, GateBundle, MineBundle,
 };
 
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Component, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum ObjectType {
     BlueBlock,
     BouncingBall,
@@ -27,6 +28,24 @@ pub enum ObjectType {
     Raft,
     RedBlock,
     Water,
+}
+
+impl Display for ObjectType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            ObjectType::BlueBlock => "BlueBlock",
+            ObjectType::BouncingBall => "BouncingBall",
+            ObjectType::Button => "Button",
+            ObjectType::Creature1 => "Creature1",
+            ObjectType::Exit => "Exit",
+            ObjectType::Gate => "Gate",
+            ObjectType::Mine => "Mine",
+            ObjectType::Player => "Player",
+            ObjectType::Raft => "Raft",
+            ObjectType::RedBlock => "RedBlock",
+            ObjectType::Water => "Water",
+        })
+    }
 }
 
 impl FromStr for ObjectType {
