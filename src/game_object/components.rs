@@ -4,9 +4,15 @@ use bevy::prelude::*;
 
 use crate::errors::UnknownDirection;
 
+/// Game object position.
+///
+/// The top-left square of a level is position (1, 1).
 #[derive(Clone, Component, Copy, Debug, Eq, PartialEq)]
 pub struct Position {
+    /// 1-based X coordinate of the object's position.
     pub x: i16,
+
+    /// 1-based Y coordinate of the object's position.
     pub y: i16,
 }
 

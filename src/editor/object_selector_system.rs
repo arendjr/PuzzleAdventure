@@ -6,7 +6,7 @@ use bevy::{
     prelude::*,
 };
 
-use super::{EditorObjectType, SelectedObjectType};
+use super::{EditorObjectType, SelectedObjectType, SELECTOR_OUTLINE_WIDTH};
 
 pub fn on_object_selector_input(
     mut interaction_query: Query<
@@ -51,9 +51,11 @@ pub fn on_selected_object_change(
                 Color::NONE
             };
         } else if is_selected_object_type {
-            commands
-                .entity(entity)
-                .insert(Outline::new(Val::Px(1.), Val::ZERO, RED.into()));
+            commands.entity(entity).insert(Outline::new(
+                Val::Px(SELECTOR_OUTLINE_WIDTH as f32),
+                Val::ZERO,
+                RED.into(),
+            ));
         }
     }
 }

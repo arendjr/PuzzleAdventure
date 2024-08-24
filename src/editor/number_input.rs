@@ -9,6 +9,7 @@ use crate::fonts::Fonts;
 pub enum NumberInput {
     Increase,
     Decrease,
+    Value,
 }
 
 #[derive(Bundle)]
@@ -25,7 +26,8 @@ impl NumberInputBundle {
                     height: Val::Px(30.),
                     flex_direction: FlexDirection::Row,
                     align_items: AlignItems::Center,
-                    justify_content: JustifyContent::SpaceAround,
+                    justify_content: JustifyContent::Start,
+                    column_gap: Val::Px(20.),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -37,19 +39,32 @@ impl NumberInputBundle {
         cb: &mut ChildBuilder,
         marker: impl Component + Copy,
         text: &str,
+        value: i16,
         fonts: &Fonts,
     ) {
+        let text_style = TextStyle {
+            font: fonts.poppins_light.clone(),
+            font_size: 18.,
+            color: WHITE.into(),
+        };
+
         cb.spawn(TextBundle {
-            text: Text::from_section(
-                text,
-                TextStyle {
-                    font: fonts.poppins_light.clone(),
-                    font_size: 18.,
-                    color: WHITE.into(),
-                },
-            ),
+            text: Text::from_section(text, text_style.clone()),
+            style: Style {
+                width: Val::Px(40.),
+                ..Default::default()
+            },
             ..Default::default()
         });
+
+        cb.spawn((
+            marker,
+            NumberInput::Value,
+            TextBundle {
+                text: Text::from_section(value.to_string(), text_style),
+                ..Default::default()
+            },
+        ));
 
         cb.spawn(NodeBundle {
             style: Style {

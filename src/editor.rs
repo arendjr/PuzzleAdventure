@@ -6,7 +6,7 @@ mod object_selector_system;
 
 use bevy::prelude::*;
 pub use editor_bundle::*;
-use editor_system::*;
+pub use editor_system::*;
 pub use object_selector_bundle::*;
 use object_selector_system::*;
 
@@ -17,6 +17,7 @@ impl Plugin for EditorPlugin {
         app.add_systems(
             Update,
             (
+                on_dimensions_changed,
                 on_editor_number_input,
                 on_object_selector_input,
                 on_selected_object_change,

@@ -11,8 +11,9 @@ const NUM_OBJECTS: i16 = EditorObjectType::__Last as i16;
 const NUM_COLUMNS: i16 = EDITOR_WIDTH / GRID_SIZE;
 const NUM_ROWS: i16 =
     NUM_OBJECTS / NUM_COLUMNS + if NUM_OBJECTS % NUM_COLUMNS == 0 { 0 } else { 1 };
-const SELECTOR_WIDTH: i16 = NUM_COLUMNS * GRID_SIZE;
-const SELECTOR_HEIGHT: i16 = NUM_ROWS * GRID_SIZE;
+pub const SELECTOR_OUTLINE_WIDTH: i16 = 1;
+const SELECTOR_WIDTH: i16 = NUM_COLUMNS * GRID_SIZE + (NUM_COLUMNS - 1) * SELECTOR_OUTLINE_WIDTH;
+const SELECTOR_HEIGHT: i16 = NUM_ROWS * GRID_SIZE + (NUM_ROWS - 1) * SELECTOR_OUTLINE_WIDTH;
 
 #[derive(Component)]
 pub struct ObjectSelector;
@@ -102,7 +103,7 @@ impl EditorObjectType {
             Self::BouncingBallUp
             | Self::BouncingBallRight
             | Self::BouncingBallDown
-            | Self::BouncingBallLeft => assets.bouncing_ball.clone(),
+            | Self::BouncingBallLeft => assets.bouncing_ball_editor.0.clone(),
             Self::Button => assets.button.clone(),
             Self::Creature1Up => assets.creature1.0.clone(),
             Self::Creature1Right => assets.creature1.0.clone(),
@@ -119,6 +120,22 @@ impl EditorObjectType {
         };
 
         let atlas = match self {
+            Self::BouncingBallUp => Some(TextureAtlas {
+                layout: assets.bouncing_ball_editor.1.clone(),
+                index: 0,
+            }),
+            Self::BouncingBallRight => Some(TextureAtlas {
+                layout: assets.bouncing_ball_editor.1.clone(),
+                index: 1,
+            }),
+            Self::BouncingBallDown => Some(TextureAtlas {
+                layout: assets.bouncing_ball_editor.1.clone(),
+                index: 2,
+            }),
+            Self::BouncingBallLeft => Some(TextureAtlas {
+                layout: assets.bouncing_ball_editor.1.clone(),
+                index: 3,
+            }),
             Self::Creature1Up => Some(TextureAtlas {
                 layout: assets.creature1.1.clone(),
                 index: 0,
@@ -156,23 +173,23 @@ impl TryFrom<i16> for EditorObjectType {
     fn try_from(value: i16) -> Result<Self, Self::Error> {
         let object_type = match value {
             0 => Self::Eraser,
-            1 => Self::BlueBlock,
-            2 => Self::BouncingBallUp,
-            3 => Self::BouncingBallRight,
-            4 => Self::BouncingBallDown,
-            5 => Self::BouncingBallLeft,
-            6 => Self::Button,
-            7 => Self::Creature1Up,
-            8 => Self::Creature1Right,
-            9 => Self::Creature1Down,
-            10 => Self::Creature1Left,
-            11 => Self::Exit,
-            12 => Self::Gate,
-            13 => Self::Mine,
-            14 => Self::Player,
-            15 => Self::Raft,
-            16 => Self::RedBlock,
-            17 => Self::Water,
+            1 => Self::Player,
+            2 => Self::Exit,
+            3 => Self::RedBlock,
+            4 => Self::BlueBlock,
+            5 => Self::BouncingBallUp,
+            6 => Self::BouncingBallRight,
+            7 => Self::BouncingBallDown,
+            8 => Self::BouncingBallLeft,
+            9 => Self::Water,
+            10 => Self::Creature1Up,
+            11 => Self::Creature1Right,
+            12 => Self::Creature1Down,
+            13 => Self::Creature1Left,
+            14 => Self::Raft,
+            15 => Self::Gate,
+            16 => Self::Button,
+            17 => Self::Mine,
             _ => return Err(()),
         };
         Ok(object_type)
@@ -199,6 +216,8 @@ impl ObjectSelectorBundle {
                     grid_template_rows: (0..NUM_ROWS)
                         .map(|_| GridTrack::px(GRID_SIZE as f32))
                         .collect(),
+                    row_gap: Val::Px(SELECTOR_OUTLINE_WIDTH as f32),
+                    column_gap: Val::Px(SELECTOR_OUTLINE_WIDTH as f32),
                     ..Default::default()
                 },
                 background_color: GRAY_800.into(),

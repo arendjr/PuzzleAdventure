@@ -3,7 +3,7 @@ use bevy::{
     prelude::*,
 };
 
-use crate::{constants::*, fonts::Fonts, game_object::GameObjectAssets};
+use crate::{constants::*, fonts::Fonts, game_object::GameObjectAssets, level::Dimensions};
 
 use super::{number_input::NumberInputBundle, ObjectSelectorBundle};
 
@@ -50,12 +50,19 @@ impl EditorBundle {
         }
     }
 
-    pub fn populate(cb: &mut ChildBuilder, assets: &GameObjectAssets, fonts: &Fonts) {
-        cb.spawn(NumberInputBundle::new())
-            .with_children(|cb| NumberInputBundle::populate(cb, Input::Width, "Width", fonts));
+    pub fn populate(
+        cb: &mut ChildBuilder,
+        assets: &GameObjectAssets,
+        dimensions: &Dimensions,
+        fonts: &Fonts,
+    ) {
+        cb.spawn(NumberInputBundle::new()).with_children(|cb| {
+            NumberInputBundle::populate(cb, Input::Width, "Width:", dimensions.width, fonts)
+        });
 
-        cb.spawn(NumberInputBundle::new())
-            .with_children(|cb| NumberInputBundle::populate(cb, Input::Height, "Height", fonts));
+        cb.spawn(NumberInputBundle::new()).with_children(|cb| {
+            NumberInputBundle::populate(cb, Input::Height, "Height:", dimensions.height, fonts)
+        });
 
         cb.spawn(ObjectSelectorBundle::new())
             .with_children(|cb| ObjectSelectorBundle::populate(cb, assets));

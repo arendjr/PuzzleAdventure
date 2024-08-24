@@ -6,6 +6,7 @@ use crate::utils::load_asset;
 pub struct GameObjectAssets {
     pub blue_block: Handle<Image>,
     pub bouncing_ball: Handle<Image>,
+    pub bouncing_ball_editor: (Handle<Image>, Handle<TextureAtlasLayout>),
     pub button: Handle<Image>,
     pub creature1: (Handle<Image>, Handle<TextureAtlasLayout>),
     pub eraser: Handle<Image>,
@@ -45,6 +46,12 @@ impl GameObjectAssets {
             bouncing_ball: images.add(load_asset(include_bytes!(
                 "../../assets/sprites/greenball.png"
             ))),
+            bouncing_ball_editor: (
+                images.add(load_asset(include_bytes!(
+                    "../../assets/sprites/greenball_editor.png"
+                ))),
+                one_by_four_atlas.clone(),
+            ),
             button: images.add(load_asset(include_bytes!(
                 "../../assets/sprites/button.png"
             ))),

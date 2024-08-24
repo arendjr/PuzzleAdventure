@@ -10,8 +10,8 @@ mod utils;
 use std::{cmp::Ordering, collections::BTreeMap};
 
 use bevy::{prelude::*, window::WindowResized};
-use constants::{BACKGROUND_SIZE, EDITOR_WIDTH, GRID_SIZE};
-use editor::{Editor, EditorBundle, EditorPlugin, SelectedObjectType};
+use constants::{BACKGROUND_SIZE, EDITOR_WIDTH, GRID_SIZE, HALF_GRID_SIZE};
+use editor::{spawn_selected_object, Editor, EditorBundle, EditorPlugin, SelectedObjectType};
 use fonts::Fonts;
 use game_object::{
     spawn_object_of_type, Animatable, Deadly, Direction, Exit, ExplosionBundle, Explosive,
@@ -119,7 +119,8 @@ fn main() {
             position_entities
                 .after(on_game_event)
                 .after(check_for_explosive)
-                .after(check_for_liquid),
+                .after(check_for_liquid)
+                .after(spawn_selected_object),
         )
         .add_systems(
             Update,
@@ -149,19 +150,15 @@ fn on_keyboard_input(keys: Res<ButtonInput<KeyCode>>, mut events: EventWriter<Ga
     }
 }
 
-fn position_entities(mut query: Query<(&Position, &mut Transform)>, dimensions: Res<Dimensions>) {
-    let half_grid_size = GRID_SIZE / 2;
+fn position_entities(
+    mut query: Query<(&Position, &mut Transform), Changed<Position>>,
+    dimensions: Res<Dimensions>,
+) {
     for (position, mut transform) in &mut query {
-        let x =
-            (-(dimensions.width * half_grid_size) + position.x * GRID_SIZE - half_grid_size) as f32;
-        if transform.translation.x != x {
-            transform.translation.x = x;
-        }
-        let y =
-            ((dimensions.height * half_grid_size) - position.y * GRID_SIZE + half_grid_size) as f32;
-        if transform.translation.y != y {
-            transform.translation.y = y;
-        }
+        transform.translation.x =
+            (-(dimensions.width * HALF_GRID_SIZE) + position.x * GRID_SIZE - HALF_GRID_SIZE) as f32;
+        transform.translation.y =
+            ((dimensions.height * HALF_GRID_SIZE) - position.y * GRID_SIZE + HALF_GRID_SIZE) as f32;
     }
 }
 
@@ -191,44 +188,46 @@ fn move_objects(
     dimensions: Res<Dimensions>,
 ) {
     timer.tick(time.delta());
-    if timer.just_finished() {
-        for (mut direction, movable, mut position, mut atlas) in &mut movable_query {
-            match movable {
-                Movable::Bounce => {
-                    if !move_object(
-                        &mut position,
-                        direction.to_delta(),
-                        &dimensions,
-                        collision_objects_query.iter_mut(),
-                        false,
-                    ) {
-                        *direction = direction.inverse();
-                    }
-                }
-                Movable::FollowRightHand => {
-                    if move_object(
-                        &mut position,
-                        direction.right_hand().to_delta(),
-                        &dimensions,
-                        collision_objects_query.iter_mut(),
-                        false,
-                    ) {
-                        *direction = direction.right_hand();
-                    } else if !move_object(
-                        &mut position,
-                        direction.to_delta(),
-                        &dimensions,
-                        collision_objects_query.iter_mut(),
-                        false,
-                    ) {
-                        *direction = direction.left_hand();
-                    }
-                }
-            }
+    if !timer.just_finished() {
+        return;
+    }
 
-            if let Some(atlas) = atlas.as_mut() {
-                atlas.index = *direction as usize;
+    for (mut direction, movable, mut position, mut atlas) in &mut movable_query {
+        match movable {
+            Movable::Bounce => {
+                if !move_object(
+                    &mut position,
+                    direction.to_delta(),
+                    &dimensions,
+                    collision_objects_query.iter_mut(),
+                    false,
+                ) {
+                    *direction = direction.inverse();
+                }
             }
+            Movable::FollowRightHand => {
+                if move_object(
+                    &mut position,
+                    direction.right_hand().to_delta(),
+                    &dimensions,
+                    collision_objects_query.iter_mut(),
+                    false,
+                ) {
+                    *direction = direction.right_hand();
+                } else if !move_object(
+                    &mut position,
+                    direction.to_delta(),
+                    &dimensions,
+                    collision_objects_query.iter_mut(),
+                    false,
+                ) {
+                    *direction = direction.left_hand();
+                }
+            }
+        }
+
+        if let Some(atlas) = atlas.as_mut() {
+            atlas.index = *direction as usize;
         }
     }
 }
@@ -575,12 +574,16 @@ fn on_game_event(
     for event in level_events.read() {
         match event {
             GameEvent::ChangeHeight(delta) => {
-                dimensions.height += delta;
-                resize_background = true;
+                if dimensions.height + delta > 0 {
+                    dimensions.height += delta;
+                    resize_background = true;
+                }
             }
             GameEvent::ChangeWidth(delta) => {
-                dimensions.width += delta;
-                resize_background = true;
+                if dimensions.width + delta > 0 {
+                    dimensions.width += delta;
+                    resize_background = true;
+                }
             }
             GameEvent::ChangeZoom(factor) => {
                 zoom.factor *= factor;
@@ -721,6 +724,7 @@ fn toggle_editor(
     mut temporary_timer: ResMut<TemporaryTimer>,
     editor_query: Query<Entity, With<Editor>>,
     assets: Res<GameObjectAssets>,
+    dimensions: Res<Dimensions>,
     fonts: Res<Fonts>,
 ) {
     let Some(_event) = events.read().last() else {
@@ -736,7 +740,7 @@ fn toggle_editor(
     } else {
         commands
             .spawn(EditorBundle::new())
-            .with_children(|cb| EditorBundle::populate(cb, &assets, &fonts));
+            .with_children(|cb| EditorBundle::populate(cb, &assets, &dimensions, &fonts));
 
         movement_timer.pause();
         temporary_timer.pause();
