@@ -13,11 +13,13 @@ pub struct GameObjectAssets {
     pub explosion: Handle<Image>,
     pub exit: Handle<Image>,
     pub gate: (Handle<Image>, Handle<TextureAtlasLayout>),
+    pub grave: Handle<Image>,
     pub mine: Handle<Image>,
     pub player: Handle<Image>,
     pub raft: Handle<Image>,
     pub red_block: Handle<Image>,
     pub splash: Handle<Image>,
+    pub transporter: (Handle<Image>, Handle<TextureAtlasLayout>),
     pub water: (Handle<Image>, Handle<TextureAtlasLayout>),
 }
 
@@ -59,7 +61,7 @@ impl GameObjectAssets {
                 images.add(load_asset(include_bytes!(
                     "../../assets/sprites/creature1.png"
                 ))),
-                one_by_four_atlas,
+                one_by_four_atlas.clone(),
             ),
             eraser: images.add(load_asset(include_bytes!(
                 "../../assets/sprites/eraser.png"
@@ -72,6 +74,7 @@ impl GameObjectAssets {
                 images.add(load_asset(include_bytes!("../../assets/sprites/gate.png"))),
                 one_by_two_atlas,
             ),
+            grave: images.add(load_asset(include_bytes!("../../assets/sprites/grave.png"))),
             mine: images.add(load_asset(include_bytes!("../../assets/sprites/mine.png"))),
             player: images.add(load_asset(include_bytes!(
                 "../../assets/sprites/player.png"
@@ -83,6 +86,12 @@ impl GameObjectAssets {
             splash: images.add(load_asset(include_bytes!(
                 "../../assets/sprites/splash.png"
             ))),
+            transporter: (
+                images.add(load_asset(include_bytes!(
+                    "../../assets/sprites/transporter.png"
+                ))),
+                one_by_four_atlas,
+            ),
             water: (
                 images.add(load_asset(include_bytes!("../../assets/sprites/water.png"))),
                 one_by_three_atlas,

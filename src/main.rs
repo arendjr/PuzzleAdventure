@@ -9,7 +9,14 @@ mod utils;
 
 use std::{borrow::Cow, collections::BTreeMap, fs};
 
-use bevy::{prelude::*, window::WindowResized};
+use bevy::{
+    color::palettes::{
+        css::{RED, WHITE},
+        tailwind::GRAY_900,
+    },
+    prelude::*,
+    window::WindowResized,
+};
 use constants::{BACKGROUND_SIZE, EDITOR_WIDTH, GRID_SIZE, HALF_GRID_SIZE};
 use editor::{spawn_selected_object, Editor, EditorBundle, EditorPlugin, SelectedObjectType};
 use fonts::Fonts;
@@ -20,6 +27,9 @@ use utils::{get_level_filename, load_repeating_asset};
 
 #[derive(Component)]
 struct Background;
+
+#[derive(Component)]
+struct GameOver;
 
 #[derive(Resource)]
 struct Levels {
@@ -115,6 +125,7 @@ fn main() {
                 check_for_exit,
                 check_for_explosive,
                 check_for_liquid,
+                check_for_game_over,
                 despawn_volatile_objects,
             )
                 .after(on_keyboard_input),
@@ -158,6 +169,16 @@ fn setup(
     mut level_events: EventWriter<GameEvent>,
     mut fonts: ResMut<Fonts>,
 ) {
+    *game_object_assets.as_mut() =
+        GameObjectAssets::load(&mut image_assets, &mut texture_atlas_layouts);
+
+    fonts.poppins_light = font_assets.add(
+        Font::try_from_bytes(Vec::from(include_bytes!(
+            "../assets/font/Poppins/Poppins-Light.ttf"
+        )))
+        .unwrap(),
+    );
+
     commands.spawn(Camera2dBundle::default());
 
     commands.spawn((
@@ -174,20 +195,52 @@ fn setup(
         },
     ));
 
-    *game_object_assets.as_mut() =
-        GameObjectAssets::load(&mut image_assets, &mut texture_atlas_layouts);
-
-    fonts.poppins_light = font_assets.add(
-        Font::try_from_bytes(Vec::from(include_bytes!(
-            "../assets/font/Poppins/Poppins-Light.ttf"
-        )))
-        .unwrap(),
-    );
+    commands
+        .spawn((
+            GameOver,
+            NodeBundle {
+                style: Style {
+                    display: Display::None,
+                    width: Val::Px(300.),
+                    height: Val::Px(80.),
+                    border: UiRect::all(Val::Px(2.)),
+                    margin: UiRect::all(Val::Auto),
+                    position_type: PositionType::Absolute,
+                    ..Default::default()
+                },
+                background_color: GRAY_900.into(),
+                border_color: RED.into(),
+                z_index: ZIndex::Global(100),
+                ..Default::default()
+            },
+        ))
+        .with_children(|cb| {
+            cb.spawn(TextBundle {
+                text: Text::from_section(
+                    "Game Over\n\nPress Enter to try again",
+                    TextStyle {
+                        font: fonts.poppins_light.clone(),
+                        font_size: 18.,
+                        color: WHITE.into(),
+                    },
+                )
+                .with_justify(JustifyText::Center),
+                style: Style {
+                    margin: UiRect::all(Val::Auto),
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+        });
 
     level_events.send(GameEvent::LoadRelativeLevel(0));
 }
 
-fn on_keyboard_input(keys: Res<ButtonInput<KeyCode>>, mut events: EventWriter<GameEvent>) {
+fn on_keyboard_input(
+    mut events: EventWriter<GameEvent>,
+    player_query: Query<Entity, With<Player>>,
+    keys: Res<ButtonInput<KeyCode>>,
+) {
     for key in keys.get_just_pressed() {
         use KeyCode::*;
         match key {
@@ -195,6 +248,9 @@ fn on_keyboard_input(keys: Res<ButtonInput<KeyCode>>, mut events: EventWriter<Ga
             ArrowRight => events.send(GameEvent::MovePlayer(1, 0)),
             ArrowDown => events.send(GameEvent::MovePlayer(0, 1)),
             ArrowLeft => events.send(GameEvent::MovePlayer(-1, 0)),
+            Enter if player_query.get_single().is_err() => {
+                events.send(GameEvent::LoadRelativeLevel(0))
+            }
             Equal => events.send(GameEvent::ChangeZoom(1.25)),
             Minus => events.send(GameEvent::ChangeZoom(0.8)),
             BracketRight => events.send(GameEvent::LoadRelativeLevel(1)),
@@ -255,17 +311,16 @@ fn on_game_event(
                     as usize;
             }
             GameEvent::MovePlayer(dx, dy) => {
-                let mut position = player_query
-                    .get_single_mut()
-                    .expect("there should be only one player");
-                move_object(
-                    &mut position,
-                    (*dx, *dy),
-                    &dimensions,
-                    collision_objects_query.iter_mut(),
-                    true,
-                );
-                transform_events.send(TransformEvent::Update);
+                if let Ok(mut position) = player_query.get_single_mut() {
+                    move_object(
+                        &mut position,
+                        (*dx, *dy),
+                        &dimensions,
+                        collision_objects_query.iter_mut(),
+                        true,
+                    );
+                    transform_events.send(TransformEvent::Update);
+                }
             }
             GameEvent::ToggleEditor => {
                 editor_events.send(EditorEvent::Toggle);
@@ -407,6 +462,22 @@ fn save_level(
     levels.levels[current_level] = content.into();
 }
 
+fn check_for_game_over(
+    mut game_over_query: Query<&mut Style, With<GameOver>>,
+    editor_query: Query<Entity, With<Editor>>,
+    player_query: Query<Entity, With<Player>>,
+) {
+    let mut game_over_style = game_over_query.get_single_mut().unwrap();
+
+    if player_query.get_single().is_ok() || editor_query.get_single().is_ok() {
+        if game_over_style.display != Display::None {
+            game_over_style.display = Display::None;
+        }
+    } else if game_over_style.display != Display::Flex {
+        game_over_style.display = Display::Flex;
+    }
+}
+
 fn spawn_level_objects(
     commands: &mut ChildBuilder,
     objects: BTreeMap<ObjectType, Vec<InitialPositionAndDirection>>,
@@ -477,10 +548,10 @@ fn update_level_transform(
         return;
     };
 
-    let editor_open = editor_query.get_single().is_ok();
-    let player_position = player_query
-        .get_single()
-        .expect("there should be only one player");
+    let Ok(player_position) = player_query.get_single() else {
+        return;
+    };
+
     let mut transform = background_query
         .get_single_mut()
         .expect("there should be only one background");
@@ -491,6 +562,7 @@ fn update_level_transform(
 
     transform.scale = Vec3::new(zoom.factor, zoom.factor, 1.);
 
+    let editor_open = editor_query.get_single().is_ok();
     let editor_width = if editor_open { EDITOR_WIDTH as f32 } else { 0. };
     let level_width = (dimensions.width * GRID_SIZE) as f32 * zoom.factor;
     let x = if level_width > window_size.x - editor_width {

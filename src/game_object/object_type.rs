@@ -12,7 +12,7 @@ use super::{
         BlueBlockBundle, BouncingBallBundle, Creature1Bundle, ExitBundle, PlayerBundle, RaftBundle,
         RedBlockBundle, WaterBundle,
     },
-    ButtonBundle, Direction, GateBundle, MineBundle,
+    ButtonBundle, Direction, GateBundle, MineBundle, TransporterBundle,
 };
 
 #[derive(Clone, Component, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -27,6 +27,7 @@ pub enum ObjectType {
     Player,
     Raft,
     RedBlock,
+    Transporter,
     Water,
 }
 
@@ -43,6 +44,7 @@ impl Display for ObjectType {
             ObjectType::Player => "Player",
             ObjectType::Raft => "Raft",
             ObjectType::RedBlock => "RedBlock",
+            ObjectType::Transporter => "Transporter",
             ObjectType::Water => "Water",
         })
     }
@@ -63,6 +65,7 @@ impl FromStr for ObjectType {
             "Player" => Ok(Self::Player),
             "Raft" => Ok(Self::Raft),
             "RedBlock" => Ok(Self::RedBlock),
+            "Transporter" => Ok(Self::Transporter),
             "Water" => Ok(Self::Water),
             _ => Err(UnknownObjectType),
         }
@@ -89,6 +92,7 @@ pub fn spawn_object_of_type<'a>(
         ObjectType::Player => cb.spawn(PlayerBundle::spawn(assets, position)),
         ObjectType::Raft => cb.spawn(RaftBundle::spawn(assets, position)),
         ObjectType::RedBlock => cb.spawn(RedBlockBundle::spawn(assets, position)),
+        ObjectType::Transporter => cb.spawn(TransporterBundle::spawn(assets, position, direction)),
         ObjectType::Water => cb.spawn(WaterBundle::spawn(assets, position)),
     }
 }

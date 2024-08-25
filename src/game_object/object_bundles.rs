@@ -3,8 +3,8 @@ use bevy::prelude::*;
 use super::{
     assets::GameObjectAssets,
     components::{Exit, Liquid, Massive, Player, Position, Pushable},
-    Animatable, Deadly, Direction, Explosive, Floatable, Movable, ObjectType, Openable, Trigger,
-    Volatile,
+    Animatable, Deadly, Direction, Explosive, Floatable, Movable, ObjectType, Openable,
+    Transporter, Trigger, Volatile,
 };
 
 #[derive(Bundle)]
@@ -189,6 +189,27 @@ impl GateBundle {
 }
 
 #[derive(Bundle)]
+pub struct GraveBundle {
+    massive: Massive,
+    position: Position,
+    sprite: SpriteBundle,
+}
+
+impl GraveBundle {
+    pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
+        Self {
+            massive: Massive,
+            position,
+            sprite: SpriteBundle {
+                texture: assets.grave.clone(),
+                transform: Transform::from_translation(Vec3::new(0., 0., 4.)),
+                ..Default::default()
+            },
+        }
+    }
+}
+
+#[derive(Bundle)]
 pub struct MineBundle {
     object_type: ObjectType,
     explosive: Explosive,
@@ -301,6 +322,36 @@ impl SplashBundle {
                 ..Default::default()
             },
             volatile: Volatile,
+        }
+    }
+}
+
+#[derive(Bundle)]
+pub struct TransporterBundle {
+    object_type: ObjectType,
+    atlas: TextureAtlas,
+    direction: Direction,
+    position: Position,
+    sprite: SpriteBundle,
+    transporter: Transporter,
+}
+
+impl TransporterBundle {
+    pub fn spawn(assets: &GameObjectAssets, position: Position, direction: Direction) -> Self {
+        Self {
+            object_type: ObjectType::Transporter,
+            atlas: TextureAtlas {
+                layout: assets.transporter.1.clone(),
+                index: 0,
+            },
+            direction,
+            position,
+            sprite: SpriteBundle {
+                texture: assets.transporter.0.clone(),
+                transform: Transform::from_translation(Vec3::new(0., 0., 1.)),
+                ..Default::default()
+            },
+            transporter: Transporter,
         }
     }
 }

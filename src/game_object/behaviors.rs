@@ -29,15 +29,25 @@ pub fn animate_objects(
 }
 
 pub fn check_for_deadly(
-    player_query: Query<&Position, With<Player>>,
-    deadly_query: Query<&Position, With<Deadly>>,
-    mut level_events: EventWriter<GameEvent>,
+    mut commands: Commands,
+    background_query: Query<Entity, With<Background>>,
+    deadly_query: Query<(Entity, &Position), With<Deadly>>,
+    player_query: Query<(Entity, &Position), With<Player>>,
+    assets: Res<GameObjectAssets>,
 ) {
-    for player_position in &player_query {
-        for deadly_position in &deadly_query {
+    for (player, player_position) in &player_query {
+        for (deadly, deadly_position) in &deadly_query {
             if player_position == deadly_position {
-                level_events.send(GameEvent::LoadRelativeLevel(0));
-                return;
+                commands.entity(player).despawn();
+                commands.entity(deadly).despawn();
+
+                let background = background_query
+                    .get_single()
+                    .expect("there should be only one background");
+                let mut background = commands.entity(background);
+                background.with_children(|cb| {
+                    cb.spawn(GraveBundle::spawn(&assets, *player_position));
+                });
             }
         }
     }
@@ -58,28 +68,22 @@ pub fn check_for_exit(
     }
 }
 
-pub type ExplosiveSystemObject<'a> = (
-    Entity,
-    &'a Position,
-    Option<&'a Explosive>,
-    Option<&'a Player>,
-);
+pub type ExplosiveSystemObject<'a> = (Entity, &'a Position, Option<&'a Explosive>);
 
 pub fn check_for_explosive(
     mut commands: Commands,
     explosive_query: Query<ExplosiveSystemObject>,
     background_query: Query<Entity, With<Background>>,
-    mut level_events: EventWriter<GameEvent>,
     mut temporary_timer: ResMut<TemporaryTimer>,
     assets: Res<GameObjectAssets>,
 ) {
     let (explosives, objects): (Vec<ExplosiveSystemObject>, Vec<ExplosiveSystemObject>) =
         explosive_query
             .iter()
-            .partition(|(_, _, liquid, ..)| liquid.is_some());
+            .partition(|(_, _, explosive)| explosive.is_some());
 
     for (explosive, explosive_position, ..) in explosives {
-        for (object, position, _, player) in &objects {
+        for (object, position, _) in &objects {
             if explosive_position == *position {
                 commands.entity(explosive).despawn();
                 commands.entity(*object).despawn();
@@ -94,10 +98,6 @@ pub fn check_for_explosive(
                 if temporary_timer.finished() {
                     temporary_timer.reset();
                 }
-
-                if player.is_some() {
-                    level_events.send(GameEvent::LoadRelativeLevel(0));
-                }
             }
         }
     }
@@ -108,14 +108,12 @@ pub type LiquidSystemObject<'a> = (
     &'a Position,
     Option<&'a Liquid>,
     Option<&'a Floatable>,
-    Option<&'a Player>,
 );
 
 pub fn check_for_liquid(
     mut commands: Commands,
     liquid_query: Query<LiquidSystemObject>,
     background_query: Query<Entity, With<Background>>,
-    mut level_events: EventWriter<GameEvent>,
     mut temporary_timer: ResMut<TemporaryTimer>,
     assets: Res<GameObjectAssets>,
 ) {
@@ -124,19 +122,16 @@ pub fn check_for_liquid(
         .partition(|(_, _, liquid, ..)| liquid.is_some());
 
     for (_liquid, liquid_position, ..) in liquids {
-        for (object, position, _, floatable, player) in &objects {
+        for (object, position, _, floatable) in &objects {
             if liquid_position == *position {
                 if floatable.is_some() {
-                    if !objects
-                        .iter()
-                        .any(|(other, other_position, _, floatable, _)| {
-                            other != object && other_position == position && floatable.is_some()
-                        })
-                    {
+                    if !objects.iter().any(|(other, other_position, _, floatable)| {
+                        other != object && other_position == position && floatable.is_some()
+                    }) {
                         let mut object = commands.entity(*object);
                         object.remove::<Pushable>();
                     }
-                } else if !objects.iter().any(|(_, other_position, _, floatable, _)| {
+                } else if !objects.iter().any(|(_, other_position, _, floatable)| {
                     other_position == position && floatable.is_some()
                 }) {
                     commands.entity(*object).despawn();
@@ -150,10 +145,6 @@ pub fn check_for_liquid(
                     });
                     if temporary_timer.finished() {
                         temporary_timer.reset();
-                    }
-
-                    if player.is_some() {
-                        level_events.send(GameEvent::LoadRelativeLevel(0));
                     }
                 }
             }

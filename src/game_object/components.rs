@@ -162,6 +162,14 @@ pub struct Player;
 #[derive(Component)]
 pub struct Pushable;
 
+/// Entity pushes all other entities that are placed on it towards a given
+/// [Direction].
+///
+/// This is not limited to [Pushable] entities, although the behavior for
+/// pushing uses the same constraints as for pushing [Pushable] entities.
+#[derive(Component)]
+pub struct Transporter;
+
 /// Entity acts as trigger for opening gates.
 #[derive(Component)]
 pub struct Trigger;
