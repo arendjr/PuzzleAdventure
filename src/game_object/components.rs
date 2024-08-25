@@ -100,6 +100,15 @@ pub struct Animatable {
     pub num_frames: usize,
 }
 
+/// An entity that prevents the [Player] as well as other [Movable] entities
+/// from moving when on the same [Position].
+#[derive(Component)]
+pub struct BlocksMovement;
+
+/// A non-[Massive] entity that rejects being pushed on.
+#[derive(Component)]
+pub struct BlocksPushes;
+
 /// A deadly entity will kill the player if it comes into contact with it.
 #[derive(Component)]
 pub struct Deadly;

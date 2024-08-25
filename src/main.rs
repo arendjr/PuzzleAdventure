@@ -22,7 +22,7 @@ use editor::{spawn_selected_object, Editor, EditorBundle, EditorPlugin, Selected
 use fonts::Fonts;
 use game_object::{Direction, *};
 use level::{Dimensions, InitialPositionAndDirection, Level, LEVELS};
-use timers::{AnimationTimer, MovementTimer, TemporaryTimer};
+use timers::{AnimationTimer, MovementTimer, TemporaryTimer, TransporterTimer};
 use utils::{get_level_filename, load_repeating_asset};
 
 #[derive(Component)]
@@ -108,6 +108,7 @@ fn main() {
         .init_resource::<MovementTimer>()
         .init_resource::<PressedTriggers>()
         .init_resource::<TemporaryTimer>()
+        .init_resource::<TransporterTimer>()
         .init_resource::<Zoom>()
         .add_event::<EditorEvent>()
         .add_event::<GameEvent>()
@@ -118,15 +119,16 @@ fn main() {
         .add_systems(
             Update,
             (
-                on_game_event,
                 animate_objects,
-                move_objects,
                 check_for_deadly,
                 check_for_exit,
                 check_for_explosive,
                 check_for_liquid,
                 check_for_game_over,
+                check_for_transporter,
                 despawn_volatile_objects,
+                move_objects,
+                on_game_event,
             )
                 .after(on_keyboard_input),
         )
@@ -139,10 +141,11 @@ fn main() {
         .add_systems(Update, load_level.after(on_game_event).after(save_level))
         .add_systems(
             Update,
-            position_entities
+            (position_entities, update_entity_directions)
                 .after(load_level)
                 .after(check_for_explosive)
                 .after(check_for_liquid)
+                .after(move_objects)
                 .after(spawn_selected_object),
         )
         .add_systems(
@@ -258,6 +261,7 @@ fn on_keyboard_input(
             KeyE => events.send(GameEvent::ToggleEditor),
             KeyR => events.send(GameEvent::LoadRelativeLevel(0)),
             Escape => events.send(GameEvent::Exit),
+
             _ => continue,
         };
     }
@@ -275,10 +279,16 @@ fn position_entities(
     }
 }
 
+fn update_entity_directions(mut query: Query<(&Direction, &mut TextureAtlas), Changed<Direction>>) {
+    for (direction, mut atlas) in &mut query {
+        atlas.index = *direction as usize;
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn on_game_event(
     mut app_exit_events: EventWriter<AppExit>,
-    mut collision_objects_query: Query<CollissionObject, Without<Player>>,
+    mut collision_objects_query: Query<CollisionObject, Without<Player>>,
     mut dimensions: ResMut<Dimensions>,
     mut editor_events: EventWriter<EditorEvent>,
     mut level_events: EventReader<GameEvent>,
@@ -508,6 +518,7 @@ fn toggle_editor(
     mut movement_timer: ResMut<MovementTimer>,
     mut selected_object_type: ResMut<SelectedObjectType>,
     mut temporary_timer: ResMut<TemporaryTimer>,
+    mut transporter_timer: ResMut<TransporterTimer>,
     editor_query: Query<Entity, With<Editor>>,
     assets: Res<GameObjectAssets>,
     dimensions: Res<Dimensions>,
@@ -523,6 +534,7 @@ fn toggle_editor(
 
         movement_timer.unpause();
         temporary_timer.unpause();
+        transporter_timer.unpause();
     } else {
         commands
             .spawn(EditorBundle::new())
@@ -530,6 +542,7 @@ fn toggle_editor(
 
         movement_timer.pause();
         temporary_timer.pause();
+        transporter_timer.pause();
     }
 
     transform_events.send(TransformEvent::Update);

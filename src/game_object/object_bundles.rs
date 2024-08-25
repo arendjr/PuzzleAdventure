@@ -3,8 +3,8 @@ use bevy::prelude::*;
 use super::{
     assets::GameObjectAssets,
     components::{Exit, Liquid, Massive, Player, Position, Pushable},
-    Animatable, Deadly, Direction, Explosive, Floatable, Movable, ObjectType, Openable,
-    Transporter, Trigger, Volatile,
+    Animatable, BlocksMovement, BlocksPushes, Deadly, Direction, Explosive, Floatable, Movable,
+    ObjectType, Openable, Transporter, Trigger, Volatile,
 };
 
 #[derive(Bundle)]
@@ -35,6 +35,7 @@ impl BlueBlockBundle {
 #[derive(Bundle)]
 pub struct BouncingBallBundle {
     object_type: ObjectType,
+    blocks_pushes: BlocksPushes,
     deadly: Deadly,
     direction: Direction,
     movable: Movable,
@@ -46,6 +47,7 @@ impl BouncingBallBundle {
     pub fn spawn(assets: &GameObjectAssets, position: Position, direction: Direction) -> Self {
         Self {
             object_type: ObjectType::BouncingBall,
+            blocks_pushes: BlocksPushes,
             deadly: Deadly,
             direction,
             movable: Movable::Bounce,
@@ -86,6 +88,7 @@ impl ButtonBundle {
 pub struct Creature1Bundle {
     object_type: ObjectType,
     atlas: TextureAtlas,
+    blocks_pushes: BlocksPushes,
     deadly: Deadly,
     direction: Direction,
     movable: Movable,
@@ -101,6 +104,7 @@ impl Creature1Bundle {
                 layout: assets.creature1.1.clone(),
                 index: direction as usize,
             },
+            blocks_pushes: BlocksPushes,
             deadly: Deadly,
             direction,
             movable: Movable::FollowRightHand,
@@ -235,6 +239,7 @@ impl MineBundle {
 #[derive(Bundle)]
 pub struct PlayerBundle {
     object_type: ObjectType,
+    blocks_pushes: BlocksPushes,
     player: Player,
     position: Position,
     sprite: SpriteBundle,
@@ -244,6 +249,7 @@ impl PlayerBundle {
     pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
         Self {
             object_type: ObjectType::Player,
+            blocks_pushes: BlocksPushes,
             player: Player,
             position,
             sprite: SpriteBundle {
@@ -330,6 +336,7 @@ impl SplashBundle {
 pub struct TransporterBundle {
     object_type: ObjectType,
     atlas: TextureAtlas,
+    blocks_movement: BlocksMovement,
     direction: Direction,
     position: Position,
     sprite: SpriteBundle,
@@ -344,6 +351,7 @@ impl TransporterBundle {
                 layout: assets.transporter.1.clone(),
                 index: 0,
             },
+            blocks_movement: BlocksMovement,
             direction,
             position,
             sprite: SpriteBundle {

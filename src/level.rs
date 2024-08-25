@@ -24,6 +24,7 @@ pub const LEVELS: &[&str] = &[
     include_str!("../assets/levels/level013"),
     include_str!("../assets/levels/level014"),
     include_str!("../assets/levels/level015"),
+    include_str!("../assets/levels/level016"),
 ];
 
 #[derive(Clone, Copy, Resource)]

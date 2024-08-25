@@ -70,3 +70,26 @@ impl DerefMut for TemporaryTimer {
         &mut self.0
     }
 }
+
+#[derive(Resource)]
+pub struct TransporterTimer(Timer);
+
+impl Default for TransporterTimer {
+    fn default() -> Self {
+        Self(Timer::from_seconds(0.2, TimerMode::Repeating))
+    }
+}
+
+impl Deref for TransporterTimer {
+    type Target = Timer;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for TransporterTimer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}

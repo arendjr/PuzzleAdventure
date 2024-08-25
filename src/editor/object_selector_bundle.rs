@@ -54,6 +54,10 @@ pub enum EditorObjectType {
     Player,
     Raft,
     RedBlock,
+    TransporterUp,
+    TransporterRight,
+    TransporterDown,
+    TransporterLeft,
     Water,
     __Last,
 }
@@ -77,6 +81,10 @@ impl EditorObjectType {
             Self::Player => Some(ObjectType::Player),
             Self::Raft => Some(ObjectType::Raft),
             Self::RedBlock => Some(ObjectType::RedBlock),
+            Self::TransporterUp
+            | Self::TransporterRight
+            | Self::TransporterDown
+            | Self::TransporterLeft => Some(ObjectType::Transporter),
             Self::Water => Some(ObjectType::Water),
             Self::Eraser | Self::__Last => None,
         };
@@ -90,6 +98,10 @@ impl EditorObjectType {
             Self::Creature1Right => Direction::Right,
             Self::Creature1Down => Direction::Down,
             Self::Creature1Left => Direction::Left,
+            Self::TransporterUp => Direction::Up,
+            Self::TransporterRight => Direction::Right,
+            Self::TransporterDown => Direction::Down,
+            Self::TransporterLeft => Direction::Left,
             _ => Direction::default(),
         };
 
@@ -115,6 +127,10 @@ impl EditorObjectType {
             Self::Player => assets.player.clone(),
             Self::Raft => assets.raft.clone(),
             Self::RedBlock => assets.red_block.clone(),
+            Self::TransporterUp
+            | Self::TransporterRight
+            | Self::TransporterDown
+            | Self::TransporterLeft => assets.transporter.0.clone(),
             Self::Water => assets.water.0.clone(),
             Self::__Last => unreachable!(),
         };
@@ -156,6 +172,22 @@ impl EditorObjectType {
                 layout: assets.gate.1.clone(),
                 index: 0,
             }),
+            Self::TransporterUp => Some(TextureAtlas {
+                layout: assets.transporter.1.clone(),
+                index: 0,
+            }),
+            Self::TransporterRight => Some(TextureAtlas {
+                layout: assets.transporter.1.clone(),
+                index: 1,
+            }),
+            Self::TransporterDown => Some(TextureAtlas {
+                layout: assets.transporter.1.clone(),
+                index: 2,
+            }),
+            Self::TransporterLeft => Some(TextureAtlas {
+                layout: assets.transporter.1.clone(),
+                index: 3,
+            }),
             Self::Water => Some(TextureAtlas {
                 layout: assets.water.1.clone(),
                 index: 0,
@@ -187,9 +219,13 @@ impl TryFrom<i16> for EditorObjectType {
             12 => Self::Creature1Down,
             13 => Self::Creature1Left,
             14 => Self::Raft,
-            15 => Self::Gate,
-            16 => Self::Button,
-            17 => Self::Mine,
+            15 => Self::TransporterUp,
+            16 => Self::TransporterRight,
+            17 => Self::TransporterDown,
+            18 => Self::TransporterLeft,
+            19 => Self::Mine,
+            20 => Self::Gate,
+            21 => Self::Button,
             _ => return Err(()),
         };
         Ok(object_type)

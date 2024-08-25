@@ -1,11 +1,11 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::BTreeSet};
 
 use bevy::prelude::*;
 use rand::{thread_rng, Rng};
 
 use crate::{
     level::Dimensions,
-    timers::{AnimationTimer, MovementTimer, TemporaryTimer},
+    timers::{AnimationTimer, MovementTimer, TemporaryTimer, TransporterTimer},
     Background, GameEvent, PressedTriggers,
 };
 
@@ -152,6 +152,38 @@ pub fn check_for_liquid(
     }
 }
 
+pub fn check_for_transporter(
+    transporter_query: Query<(&Direction, &Position), With<Transporter>>,
+    mut collision_objects_query: Query<(Entity, CollisionObject), Without<Transporter>>,
+    mut timer: ResMut<TransporterTimer>,
+    dimensions: Res<Dimensions>,
+    time: Res<Time>,
+) {
+    timer.tick(time.delta());
+    if !timer.just_finished() {
+        return;
+    }
+
+    let mut already_moved = BTreeSet::new();
+    for (direction, transporter_position) in &transporter_query {
+        let (mut transported_objects, collision_objects): (Vec<_>, Vec<_>) =
+            collision_objects_query
+                .iter_mut()
+                .partition(|(_, (position, ..))| position.as_ref() == transporter_position);
+        transported_objects.retain(|(entity, _)| !already_moved.contains(entity));
+        if let Some((transported, (position, ..))) = transported_objects.first_mut() {
+            move_object(
+                position,
+                direction.to_delta(),
+                &dimensions,
+                collision_objects.into_iter().map(|(_, object)| object),
+                false,
+            );
+            already_moved.insert(*transported);
+        }
+    }
+}
+
 pub type TriggerSystemObject<'a> = (
     Entity,
     &'a Position,
@@ -211,9 +243,9 @@ pub fn check_for_triggers(
 
 pub fn despawn_volatile_objects(
     mut commands: Commands,
+    query: Query<Entity, With<Volatile>>,
     mut timer: ResMut<TemporaryTimer>,
     time: Res<Time>,
-    query: Query<Entity, With<Volatile>>,
 ) {
     timer.tick(time.delta());
     if timer.just_finished() {
@@ -223,26 +255,27 @@ pub fn despawn_volatile_objects(
     }
 }
 
-pub type CollissionObject<'a> = (Mut<'a, Position>, Option<&'a Pushable>, Option<&'a Massive>);
+pub type CollisionObject<'a> = (
+    Mut<'a, Position>,
+    Option<&'a Pushable>,
+    Option<&'a Massive>,
+    Option<&'a BlocksPushes>,
+    Option<&'a BlocksMovement>,
+);
 
 pub fn move_objects(
+    mut movable_query: Query<(&mut Direction, &Movable, &mut Position)>,
+    mut collision_objects_query: Query<CollisionObject, Without<Movable>>,
     mut timer: ResMut<MovementTimer>,
-    time: Res<Time>,
-    mut movable_query: Query<(
-        &mut Direction,
-        &Movable,
-        &mut Position,
-        Option<&mut TextureAtlas>,
-    )>,
-    mut collision_objects_query: Query<CollissionObject, Without<Movable>>,
     dimensions: Res<Dimensions>,
+    time: Res<Time>,
 ) {
     timer.tick(time.delta());
     if !timer.just_finished() {
         return;
     }
 
-    for (mut direction, movable, mut position, mut atlas) in &mut movable_query {
+    for (mut direction, movable, mut position) in &mut movable_query {
         match movable {
             Movable::Bounce => {
                 if !move_object(
@@ -275,43 +308,40 @@ pub fn move_objects(
                 }
             }
         }
-
-        if let Some(atlas) = atlas.as_mut() {
-            atlas.index = *direction as usize;
-        }
     }
 }
 
 pub fn move_object<'a>(
-    position: &mut Mut<Position>,
+    object_position: &mut Mut<Position>,
     (dx, dy): (i16, i16),
     dimensions: &Dimensions,
-    collission_objects: impl Iterator<Item = CollissionObject<'a>>,
+    collision_objects: impl Iterator<Item = CollisionObject<'a>>,
     can_push: bool,
 ) -> bool {
-    let new_x = position.x + dx;
-    let new_y = position.y + dy;
+    let new_x = object_position.x + dx;
+    let new_y = object_position.y + dy;
     if new_x < 1 || new_x > dimensions.width || new_y < 1 || new_y > dimensions.height {
         return false;
     }
 
-    let mut collission_objects: Vec<_> = collission_objects
+    let mut collision_objects: Vec<_> = collision_objects
         .filter(|(position, ..)| {
-            if dx > 0 {
-                position.x >= new_x && position.y == new_y
-            } else if dx < 0 {
-                position.x <= new_x && position.y == new_y
-            } else if dy > 0 {
-                position.x == new_x && position.y >= new_y
-            } else if dy < 0 {
-                position.x == new_x && position.y <= new_y
-            } else {
-                false
-            }
+            position.as_ref() == object_position.as_ref()
+                || if dx > 0 {
+                    position.x >= new_x && position.y == new_y
+                } else if dx < 0 {
+                    position.x <= new_x && position.y == new_y
+                } else if dy > 0 {
+                    position.x == new_x && position.y >= new_y
+                } else if dy < 0 {
+                    position.x == new_x && position.y <= new_y
+                } else {
+                    false
+                }
         })
         .collect();
 
-    collission_objects.sort_unstable_by_key(|(position, ..)| {
+    collision_objects.sort_unstable_by_key(|(position, ..)| {
         (position.x - new_x).abs() + (position.y - new_y).abs()
     });
 
@@ -319,9 +349,9 @@ pub fn move_object<'a>(
         if x < 1 || x > dimensions.width || y < 1 || y > dimensions.height {
             return false;
         }
-        for (position, pushable, massive) in &collission_objects {
+        for (position, pushable, massive, blocks_pushes, ..) in &collision_objects {
             let has_target_position = position.x == x && position.y == y;
-            let can_push_to = !pushable.is_some() && !massive.is_some();
+            let can_push_to = !pushable.is_some() && !massive.is_some() && !blocks_pushes.is_some();
             if has_target_position && !can_push_to {
                 return false;
             }
@@ -330,7 +360,13 @@ pub fn move_object<'a>(
     };
 
     let mut pushed_object_indices = Vec::new();
-    for (index, (position, pushable, massive)) in collission_objects.iter().enumerate() {
+    for (index, (position, pushable, massive, _, blocks_movement)) in
+        collision_objects.iter().enumerate()
+    {
+        if position.as_ref() == object_position.as_ref() && blocks_movement.is_some() {
+            return false;
+        }
+
         if position.x == new_x && position.y == new_y {
             if can_push && pushable.is_some() && can_push_to(new_x + dx, new_y + dy) {
                 pushed_object_indices.push(index);
@@ -344,12 +380,12 @@ pub fn move_object<'a>(
     }
 
     for index in pushed_object_indices {
-        let position = &mut collission_objects[index].0;
+        let position = &mut collision_objects[index].0;
         position.x += dx;
         position.y += dy;
     }
 
-    position.x = new_x;
-    position.y = new_y;
+    object_position.x = new_x;
+    object_position.y = new_y;
     true
 }
