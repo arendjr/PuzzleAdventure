@@ -102,8 +102,15 @@ pub struct Animatable {
 
 /// An entity that prevents the [Player] as well as other [Movable] entities
 /// from moving when on the same [Position].
-#[derive(Component)]
-pub struct BlocksMovement;
+///
+/// Can be temporarily disabled. This is used for transporters, which will
+/// temporarily stop blocking movement of objects it cannot push further.
+#[derive(Clone, Component, Copy, Default, Eq, PartialEq)]
+pub enum BlocksMovement {
+    #[default]
+    Enabled,
+    Disabled,
+}
 
 /// A non-[Massive] entity that rejects being pushed on.
 #[derive(Component)]

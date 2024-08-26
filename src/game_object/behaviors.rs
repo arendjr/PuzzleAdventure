@@ -153,7 +153,7 @@ pub fn check_for_liquid(
 }
 
 pub fn check_for_transporter(
-    transporter_query: Query<(&Direction, &Position), With<Transporter>>,
+    mut transporter_query: Query<(&Direction, &Position, &mut BlocksMovement), With<Transporter>>,
     mut collision_objects_query: Query<(Entity, CollisionObject), Without<Transporter>>,
     mut timer: ResMut<TransporterTimer>,
     dimensions: Res<Dimensions>,
@@ -165,20 +165,25 @@ pub fn check_for_transporter(
     }
 
     let mut already_moved = BTreeSet::new();
-    for (direction, transporter_position) in &transporter_query {
+    for (direction, transporter_position, mut blocks_movement) in &mut transporter_query {
         let (mut transported_objects, collision_objects): (Vec<_>, Vec<_>) =
             collision_objects_query
                 .iter_mut()
                 .partition(|(_, (position, ..))| position.as_ref() == transporter_position);
         transported_objects.retain(|(entity, _)| !already_moved.contains(entity));
         if let Some((transported, (position, ..))) = transported_objects.first_mut() {
-            move_object(
+            if !move_object(
                 position,
                 direction.to_delta(),
                 &dimensions,
                 collision_objects.into_iter().map(|(_, object)| object),
                 false,
-            );
+            ) {
+                // If an object on a transporter cannot be moved, the
+                // transporter's [BlocksMovement] component is disabled until
+                // the object is moved away.
+                *blocks_movement = BlocksMovement::Disabled;
+            }
             already_moved.insert(*transported);
         }
     }
@@ -260,7 +265,7 @@ pub type CollisionObject<'a> = (
     Option<&'a Pushable>,
     Option<&'a Massive>,
     Option<&'a BlocksPushes>,
-    Option<&'a BlocksMovement>,
+    Option<Mut<'a, BlocksMovement>>,
 );
 
 pub fn move_objects(
@@ -363,7 +368,11 @@ pub fn move_object<'a>(
     for (index, (position, pushable, massive, _, blocks_movement)) in
         collision_objects.iter().enumerate()
     {
-        if position.as_ref() == object_position.as_ref() && blocks_movement.is_some() {
+        if position.as_ref() == object_position.as_ref()
+            && blocks_movement
+                .as_ref()
+                .is_some_and(|blocks| *blocks.as_ref() == BlocksMovement::Enabled)
+        {
             return false;
         }
 
@@ -383,6 +392,10 @@ pub fn move_object<'a>(
         let position = &mut collision_objects[index].0;
         position.x += dx;
         position.y += dy;
+    }
+
+    if let Some((.., Some(blocks_movement))) = collision_objects.first_mut() {
+        **blocks_movement = BlocksMovement::Enabled;
     }
 
     object_position.x = new_x;

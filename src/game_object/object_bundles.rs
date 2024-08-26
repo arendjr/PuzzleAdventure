@@ -351,7 +351,7 @@ impl TransporterBundle {
                 layout: assets.transporter.1.clone(),
                 index: 0,
             },
-            blocks_movement: BlocksMovement,
+            blocks_movement: BlocksMovement::Enabled,
             direction,
             position,
             sprite: SpriteBundle {

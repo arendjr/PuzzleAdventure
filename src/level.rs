@@ -25,6 +25,7 @@ pub const LEVELS: &[&str] = &[
     include_str!("../assets/levels/level014"),
     include_str!("../assets/levels/level015"),
     include_str!("../assets/levels/level016"),
+    include_str!("../assets/levels/level017"),
 ];
 
 #[derive(Clone, Copy, Resource)]
@@ -63,6 +64,7 @@ impl Level {
             let line = line.trim();
 
             if line.starts_with('[') && line.ends_with(']') {
+                direction = None;
                 section_name = Some(&line[1..line.len() - 1]);
                 continue;
             }
