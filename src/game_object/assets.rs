@@ -16,11 +16,13 @@ pub struct GameObjectAssets {
     pub grave: Handle<Image>,
     pub mine: Handle<Image>,
     pub player: Handle<Image>,
+    pub purple_block: Handle<Image>,
     pub raft: Handle<Image>,
     pub red_block: Handle<Image>,
     pub splash: Handle<Image>,
     pub transporter: (Handle<Image>, Handle<TextureAtlasLayout>),
     pub water: (Handle<Image>, Handle<TextureAtlasLayout>),
+    pub yellow_block: Handle<Image>,
 }
 
 impl GameObjectAssets {
@@ -79,6 +81,9 @@ impl GameObjectAssets {
             player: images.add(load_asset(include_bytes!(
                 "../../assets/sprites/player.png"
             ))),
+            purple_block: images.add(load_asset(include_bytes!(
+                "../../assets/sprites/purpleblock.png"
+            ))),
             raft: images.add(load_asset(include_bytes!("../../assets/sprites/raft.png"))),
             red_block: images.add(load_asset(include_bytes!(
                 "../../assets/sprites/redblock.png"
@@ -96,6 +101,9 @@ impl GameObjectAssets {
                 images.add(load_asset(include_bytes!("../../assets/sprites/water.png"))),
                 one_by_three_atlas,
             ),
+            yellow_block: images.add(load_asset(include_bytes!(
+                "../../assets/sprites/yellowblock.png"
+            ))),
         }
     }
 }

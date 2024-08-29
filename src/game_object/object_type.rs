@@ -12,7 +12,8 @@ use super::{
         BlueBlockBundle, BouncingBallBundle, Creature1Bundle, ExitBundle, PlayerBundle, RaftBundle,
         RedBlockBundle, WaterBundle,
     },
-    ButtonBundle, Direction, GateBundle, MineBundle, TransporterBundle,
+    ButtonBundle, Direction, GateBundle, MineBundle, PurpleBlockBundle, TransporterBundle,
+    YellowBlockBundle,
 };
 
 #[derive(Clone, Component, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -25,27 +26,31 @@ pub enum ObjectType {
     Gate,
     Mine,
     Player,
+    PurpleBlock,
     Raft,
     RedBlock,
     Transporter,
     Water,
+    YellowBlock,
 }
 
 impl Display for ObjectType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            ObjectType::BlueBlock => "BlueBlock",
-            ObjectType::BouncingBall => "BouncingBall",
-            ObjectType::Button => "Button",
-            ObjectType::Creature1 => "Creature1",
-            ObjectType::Exit => "Exit",
-            ObjectType::Gate => "Gate",
-            ObjectType::Mine => "Mine",
-            ObjectType::Player => "Player",
-            ObjectType::Raft => "Raft",
-            ObjectType::RedBlock => "RedBlock",
-            ObjectType::Transporter => "Transporter",
-            ObjectType::Water => "Water",
+            Self::BlueBlock => "BlueBlock",
+            Self::BouncingBall => "BouncingBall",
+            Self::Button => "Button",
+            Self::Creature1 => "Creature1",
+            Self::Exit => "Exit",
+            Self::Gate => "Gate",
+            Self::Mine => "Mine",
+            Self::Player => "Player",
+            Self::PurpleBlock => "PurpleBlock",
+            Self::Raft => "Raft",
+            Self::RedBlock => "RedBlock",
+            Self::Transporter => "Transporter",
+            Self::Water => "Water",
+            Self::YellowBlock => "YellowBlock",
         })
     }
 }
@@ -63,10 +68,12 @@ impl FromStr for ObjectType {
             "Gate" => Ok(Self::Gate),
             "Mine" => Ok(Self::Mine),
             "Player" => Ok(Self::Player),
+            "PurpleBlock" => Ok(Self::PurpleBlock),
             "Raft" => Ok(Self::Raft),
             "RedBlock" => Ok(Self::RedBlock),
             "Transporter" => Ok(Self::Transporter),
             "Water" => Ok(Self::Water),
+            "YellowBlock" => Ok(Self::YellowBlock),
             _ => Err(UnknownObjectType),
         }
     }
@@ -90,9 +97,11 @@ pub fn spawn_object_of_type<'a>(
         ObjectType::Gate => cb.spawn(GateBundle::spawn(assets, position)),
         ObjectType::Mine => cb.spawn(MineBundle::spawn(assets, position)),
         ObjectType::Player => cb.spawn(PlayerBundle::spawn(assets, position)),
+        ObjectType::PurpleBlock => cb.spawn(PurpleBlockBundle::spawn(assets, position)),
         ObjectType::Raft => cb.spawn(RaftBundle::spawn(assets, position)),
         ObjectType::RedBlock => cb.spawn(RedBlockBundle::spawn(assets, position)),
         ObjectType::Transporter => cb.spawn(TransporterBundle::spawn(assets, position, direction)),
         ObjectType::Water => cb.spawn(WaterBundle::spawn(assets, position)),
+        ObjectType::YellowBlock => cb.spawn(YellowBlockBundle::spawn(assets, position)),
     }
 }

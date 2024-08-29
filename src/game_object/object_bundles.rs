@@ -4,7 +4,7 @@ use super::{
     assets::GameObjectAssets,
     components::{Exit, Liquid, Massive, Player, Position, Pushable},
     Animatable, BlocksMovement, BlocksPushes, Deadly, Direction, Explosive, Floatable, Movable,
-    ObjectType, Openable, Transporter, Trigger, Volatile,
+    ObjectType, Openable, TransformOnPush, Transporter, Trigger, Volatile, Weight,
 };
 
 #[derive(Bundle)]
@@ -14,6 +14,7 @@ pub struct BlueBlockBundle {
     position: Position,
     pushable: Pushable,
     sprite: SpriteBundle,
+    weight: Weight,
 }
 
 impl BlueBlockBundle {
@@ -28,6 +29,7 @@ impl BlueBlockBundle {
                 transform: Transform::from_translation(Vec3::new(0., 0., 3.)),
                 ..Default::default()
             },
+            weight: Weight::Heavy,
         }
     }
 }
@@ -243,6 +245,7 @@ pub struct PlayerBundle {
     player: Player,
     position: Position,
     sprite: SpriteBundle,
+    weight: Weight,
 }
 
 impl PlayerBundle {
@@ -257,6 +260,36 @@ impl PlayerBundle {
                 transform: Transform::from_translation(Vec3::new(0., 0., 3.)),
                 ..Default::default()
             },
+            weight: Weight::Heavy,
+        }
+    }
+}
+
+#[derive(Bundle)]
+pub struct PurpleBlockBundle {
+    object_type: ObjectType,
+    massive: Massive,
+    position: Position,
+    pushable: Pushable,
+    sprite: SpriteBundle,
+    transforms: TransformOnPush,
+    weight: Weight,
+}
+
+impl PurpleBlockBundle {
+    pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
+        Self {
+            object_type: ObjectType::PurpleBlock,
+            massive: Massive,
+            position,
+            pushable: Pushable,
+            sprite: SpriteBundle {
+                texture: assets.purple_block.clone(),
+                transform: Transform::from_translation(Vec3::new(0., 0., 3.)),
+                ..Default::default()
+            },
+            transforms: TransformOnPush(ObjectType::RedBlock),
+            weight: Weight::Heavy,
         }
     }
 }
@@ -268,6 +301,7 @@ pub struct RaftBundle {
     position: Position,
     pushable: Pushable,
     sprite: SpriteBundle,
+    weight: Weight,
 }
 
 impl RaftBundle {
@@ -282,6 +316,7 @@ impl RaftBundle {
                 transform: Transform::from_translation(Vec3::new(0., 0., 2.)),
                 ..Default::default()
             },
+            weight: Weight::Heavy,
         }
     }
 }
@@ -388,6 +423,31 @@ impl WaterBundle {
             sprite: SpriteBundle {
                 texture: assets.water.0.clone(),
                 transform: Transform::from_translation(Vec3::new(0., 0., 1.)),
+                ..Default::default()
+            },
+        }
+    }
+}
+
+#[derive(Bundle)]
+pub struct YellowBlockBundle {
+    object_type: ObjectType,
+    massive: Massive,
+    position: Position,
+    pushable: Pushable,
+    sprite: SpriteBundle,
+}
+
+impl YellowBlockBundle {
+    pub fn spawn(assets: &GameObjectAssets, position: Position) -> Self {
+        Self {
+            object_type: ObjectType::YellowBlock,
+            massive: Massive,
+            position,
+            pushable: Pushable,
+            sprite: SpriteBundle {
+                texture: assets.yellow_block.clone(),
+                transform: Transform::from_translation(Vec3::new(0., 0., 3.)),
                 ..Default::default()
             },
         }

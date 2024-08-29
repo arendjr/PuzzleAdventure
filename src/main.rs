@@ -125,6 +125,7 @@ fn main() {
                 check_for_explosive,
                 check_for_liquid,
                 check_for_game_over,
+                check_for_transform_on_push,
                 check_for_transporter,
                 despawn_volatile_objects,
                 move_objects,
@@ -293,7 +294,7 @@ fn on_game_event(
     mut editor_events: EventWriter<EditorEvent>,
     mut level_events: EventReader<GameEvent>,
     mut levels: ResMut<Levels>,
-    mut player_query: Query<&mut Position, With<Player>>,
+    mut player_query: Query<(&mut Position, Option<&Weight>), With<Player>>,
     mut selected_object_type: ResMut<SelectedObjectType>,
     mut transform_events: EventWriter<TransformEvent>,
     mut zoom: ResMut<Zoom>,
@@ -321,13 +322,13 @@ fn on_game_event(
                     as usize;
             }
             GameEvent::MovePlayer(dx, dy) => {
-                if let Ok(mut position) = player_query.get_single_mut() {
+                if let Ok((mut position, weight)) = player_query.get_single_mut() {
                     move_object(
                         &mut position,
                         (*dx, *dy),
                         &dimensions,
                         collision_objects_query.iter_mut(),
-                        true,
+                        weight.copied().unwrap_or_default(),
                     );
                     transform_events.send(TransformEvent::Update);
                 }

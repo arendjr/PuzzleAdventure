@@ -52,6 +52,7 @@ pub enum EditorObjectType {
     Gate,
     Mine,
     Player,
+    PurpleBlock,
     Raft,
     RedBlock,
     TransporterUp,
@@ -59,6 +60,7 @@ pub enum EditorObjectType {
     TransporterDown,
     TransporterLeft,
     Water,
+    YellowBlock,
     __Last,
 }
 
@@ -79,6 +81,7 @@ impl EditorObjectType {
             Self::Gate => Some(ObjectType::Gate),
             Self::Mine => Some(ObjectType::Mine),
             Self::Player => Some(ObjectType::Player),
+            Self::PurpleBlock => Some(ObjectType::PurpleBlock),
             Self::Raft => Some(ObjectType::Raft),
             Self::RedBlock => Some(ObjectType::RedBlock),
             Self::TransporterUp
@@ -86,6 +89,7 @@ impl EditorObjectType {
             | Self::TransporterDown
             | Self::TransporterLeft => Some(ObjectType::Transporter),
             Self::Water => Some(ObjectType::Water),
+            Self::YellowBlock => Some(ObjectType::YellowBlock),
             Self::Eraser | Self::__Last => None,
         };
 
@@ -125,6 +129,7 @@ impl EditorObjectType {
             Self::Gate => assets.gate.0.clone(),
             Self::Mine => assets.mine.clone(),
             Self::Player => assets.player.clone(),
+            Self::PurpleBlock => assets.purple_block.clone(),
             Self::Raft => assets.raft.clone(),
             Self::RedBlock => assets.red_block.clone(),
             Self::TransporterUp
@@ -132,6 +137,7 @@ impl EditorObjectType {
             | Self::TransporterDown
             | Self::TransporterLeft => assets.transporter.0.clone(),
             Self::Water => assets.water.0.clone(),
+            Self::YellowBlock => assets.yellow_block.clone(),
             Self::__Last => unreachable!(),
         };
 
@@ -226,6 +232,8 @@ impl TryFrom<i16> for EditorObjectType {
             19 => Self::Mine,
             20 => Self::Gate,
             21 => Self::Button,
+            22 => Self::PurpleBlock,
+            23 => Self::YellowBlock,
             _ => return Err(()),
         };
         Ok(object_type)

@@ -4,6 +4,8 @@ use bevy::prelude::*;
 
 use crate::errors::UnknownDirection;
 
+use super::ObjectType;
+
 /// Game object position.
 ///
 /// The top-left square of a level is position (1, 1).
@@ -175,8 +177,15 @@ pub struct Player;
 
 /// A movable entity will be "pushed" if possible when another entity attempts
 /// to move onto it.
+///
+/// Pushable entities can only be pushed by other entities of equal or more
+/// weight.
 #[derive(Component)]
 pub struct Pushable;
+
+/// After pushing, entity transforms into another of the given type.
+#[derive(Component)]
+pub struct TransformOnPush(pub ObjectType);
 
 /// Entity pushes all other entities that are placed on it towards a given
 /// [Direction].
@@ -193,3 +202,14 @@ pub struct Trigger;
 /// Automatically disappears after spawning.
 #[derive(Component)]
 pub struct Volatile;
+
+/// Weight of an entity.
+///
+/// Pushable entities can only be pushed by other entities of equal or more
+/// weight.
+#[derive(Clone, Component, Copy, Default, Eq, Ord, PartialEq, PartialOrd)]
+pub enum Weight {
+    #[default]
+    Light,
+    Heavy,
+}

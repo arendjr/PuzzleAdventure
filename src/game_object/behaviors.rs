@@ -6,13 +6,13 @@ use rand::{thread_rng, Rng};
 use crate::{
     level::Dimensions,
     timers::{AnimationTimer, MovementTimer, TemporaryTimer, TransporterTimer},
-    Background, GameEvent, PressedTriggers,
+    Background, GameEvent, PressedTriggers, Pushable,
 };
 
 use super::{
     components::{Animatable, Direction, Trigger, *},
     object_bundles::*,
-    GameObjectAssets,
+    spawn_object_of_type, GameObjectAssets,
 };
 
 pub fn animate_objects(
@@ -152,6 +152,38 @@ pub fn check_for_liquid(
     }
 }
 
+#[allow(clippy::type_complexity)]
+pub fn check_for_transform_on_push(
+    mut commands: Commands,
+    background_query: Query<Entity, With<Background>>,
+    transform_query: Query<
+        (Entity, Option<&Direction>, Ref<Position>, &TransformOnPush),
+        With<Pushable>,
+    >,
+    assets: Res<GameObjectAssets>,
+) {
+    for (entity, direction, position, TransformOnPush(object_type)) in &transform_query {
+        if position.is_changed() && !position.is_added() {
+            commands.entity(entity).despawn();
+
+            let background_entity = background_query
+                .get_single()
+                .expect("there should be only one background");
+
+            let mut background = commands.entity(background_entity);
+            background.with_children(|cb| {
+                spawn_object_of_type(
+                    cb,
+                    &assets,
+                    *object_type,
+                    *position,
+                    direction.copied().unwrap_or_default(),
+                );
+            });
+        }
+    }
+}
+
 pub fn check_for_transporter(
     mut transporter_query: Query<(&Direction, &Position, &mut BlocksMovement), With<Transporter>>,
     mut collision_objects_query: Query<(Entity, CollisionObject), Without<Transporter>>,
@@ -177,7 +209,7 @@ pub fn check_for_transporter(
                 direction.to_delta(),
                 &dimensions,
                 collision_objects.into_iter().map(|(_, object)| object),
-                false,
+                Weight::Light,
             ) {
                 // If an object on a transporter cannot be moved, the
                 // transporter's [BlocksMovement] component is disabled until
@@ -265,11 +297,12 @@ pub type CollisionObject<'a> = (
     Option<&'a Pushable>,
     Option<&'a Massive>,
     Option<&'a BlocksPushes>,
+    Option<&'a Weight>,
     Option<Mut<'a, BlocksMovement>>,
 );
 
 pub fn move_objects(
-    mut movable_query: Query<(&mut Direction, &Movable, &mut Position)>,
+    mut movable_query: Query<(&mut Direction, &Movable, &mut Position, Option<&Weight>)>,
     mut collision_objects_query: Query<CollisionObject, Without<Movable>>,
     mut timer: ResMut<MovementTimer>,
     dimensions: Res<Dimensions>,
@@ -280,7 +313,7 @@ pub fn move_objects(
         return;
     }
 
-    for (mut direction, movable, mut position) in &mut movable_query {
+    for (mut direction, movable, mut position, weight) in &mut movable_query {
         match movable {
             Movable::Bounce => {
                 if !move_object(
@@ -288,7 +321,7 @@ pub fn move_objects(
                     direction.to_delta(),
                     &dimensions,
                     collision_objects_query.iter_mut(),
-                    false,
+                    weight.copied().unwrap_or_default(),
                 ) {
                     *direction = direction.inverse();
                 }
@@ -299,7 +332,7 @@ pub fn move_objects(
                     direction.right_hand().to_delta(),
                     &dimensions,
                     collision_objects_query.iter_mut(),
-                    false,
+                    weight.copied().unwrap_or_default(),
                 ) {
                     *direction = direction.right_hand();
                 } else if !move_object(
@@ -307,7 +340,7 @@ pub fn move_objects(
                     direction.to_delta(),
                     &dimensions,
                     collision_objects_query.iter_mut(),
-                    false,
+                    weight.copied().unwrap_or_default(),
                 ) {
                     *direction = direction.left_hand();
                 }
@@ -321,7 +354,7 @@ pub fn move_object<'a>(
     (dx, dy): (i16, i16),
     dimensions: &Dimensions,
     collision_objects: impl Iterator<Item = CollisionObject<'a>>,
-    can_push: bool,
+    max_weight: Weight,
 ) -> bool {
     let new_x = object_position.x + dx;
     let new_y = object_position.y + dy;
@@ -365,7 +398,7 @@ pub fn move_object<'a>(
     };
 
     let mut pushed_object_indices = Vec::new();
-    for (index, (position, pushable, massive, _, blocks_movement)) in
+    for (index, (position, pushable, massive, _, weight, blocks_movement)) in
         collision_objects.iter().enumerate()
     {
         if position.as_ref() == object_position.as_ref()
@@ -377,7 +410,8 @@ pub fn move_object<'a>(
         }
 
         if position.x == new_x && position.y == new_y {
-            if can_push && pushable.is_some() && can_push_to(new_x + dx, new_y + dy) {
+            let weight = weight.copied().unwrap_or_default();
+            if weight <= max_weight && pushable.is_some() && can_push_to(new_x + dx, new_y + dy) {
                 pushed_object_indices.push(index);
                 continue;
             }
@@ -394,8 +428,12 @@ pub fn move_object<'a>(
         position.y += dy;
     }
 
-    if let Some((.., Some(blocks_movement))) = collision_objects.first_mut() {
-        **blocks_movement = BlocksMovement::Enabled;
+    for (position, .., blocks_movement) in &mut collision_objects {
+        if let Some(blocks_movement) = blocks_movement {
+            if position.as_ref() == object_position.as_ref() {
+                **blocks_movement = BlocksMovement::Enabled;
+            }
+        }
     }
 
     object_position.x = new_x;
