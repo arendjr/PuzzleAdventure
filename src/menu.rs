@@ -169,27 +169,54 @@ pub fn on_menu_keyboard_input(
         match key {
             ArrowUp => menu_state.move_selected_button(-1),
             ArrowDown => menu_state.move_selected_button(1),
-            Enter | Space => match menu_state.selected_button {
-                MenuButton::Start => {
-                    events.send(GameEvent::LoadRelativeLevel(0));
-                    menu_state.is_open = false;
-                }
-                MenuButton::Editor => {
-                    events.send(GameEvent::LoadRelativeLevel(0));
-                    events.send(GameEvent::ToggleEditor);
-                    menu_state.is_open = false;
-                }
-                MenuButton::OtherGames => { /* TODO */ }
-                MenuButton::Exit => {
-                    events.send(GameEvent::Exit);
-                }
-                MenuButton::__Last => unreachable!(),
-            },
+            Enter | Space => {
+                handle_button_press(events, menu_state);
+                return;
+            }
             Escape => {
                 events.send(GameEvent::Exit);
             }
 
             _ => continue,
         };
+    }
+}
+
+pub fn on_menu_interaction_input(
+    events: EventWriter<GameEvent>,
+    button_query: Query<(&Interaction, &MenuButton), Changed<Interaction>>,
+    mut menu_state: ResMut<MenuState>,
+) {
+    for (interaction, menu_button) in &button_query {
+        match *interaction {
+            Interaction::Pressed => {
+                menu_state.selected_button = *menu_button;
+                handle_button_press(events, menu_state);
+                return;
+            }
+            Interaction::Hovered => {
+                menu_state.selected_button = *menu_button;
+            }
+            Interaction::None => {}
+        }
+    }
+}
+
+fn handle_button_press(mut events: EventWriter<GameEvent>, mut menu_state: ResMut<MenuState>) {
+    match menu_state.selected_button {
+        MenuButton::Start => {
+            events.send(GameEvent::LoadRelativeLevel(0));
+            menu_state.is_open = false;
+        }
+        MenuButton::Editor => {
+            events.send(GameEvent::LoadRelativeLevel(0));
+            events.send(GameEvent::ToggleEditor);
+            menu_state.is_open = false;
+        }
+        MenuButton::OtherGames => { /* TODO */ }
+        MenuButton::Exit => {
+            events.send(GameEvent::Exit);
+        }
+        MenuButton::__Last => unreachable!(),
     }
 }

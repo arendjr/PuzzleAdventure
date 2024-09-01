@@ -24,7 +24,7 @@ use fonts::Fonts;
 use game_object::{Direction, *};
 use gameover::{check_for_game_over, setup_gameover};
 use level::{Dimensions, InitialPositionAndDirection, Level, LEVELS};
-use menu::{on_menu_keyboard_input, render_menu, setup_menu, MenuState};
+use menu::{on_menu_interaction_input, on_menu_keyboard_input, render_menu, setup_menu, MenuState};
 use timers::{AnimationTimer, MovementTimer, TemporaryTimer, TransporterTimer};
 use utils::{get_level_filename, load_repeating_asset};
 use winit::window::Icon;
@@ -119,7 +119,15 @@ fn main() {
         .add_event::<SaveLevelEvent>()
         .add_event::<TransformEvent>()
         .add_systems(Startup, (set_window_icon, setup))
-        .add_systems(Update, (on_keyboard_input, on_resize_system, save_level))
+        .add_systems(
+            Update,
+            (
+                on_keyboard_input,
+                on_menu_interaction_input,
+                on_resize_system,
+                save_level,
+            ),
+        )
         .add_systems(
             Update,
             (
