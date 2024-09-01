@@ -1,9 +1,6 @@
-use bevy::{
-    color::palettes::{css::WHITE, tailwind::GRAY_950},
-    prelude::*,
-};
+use bevy::prelude::*;
 
-use crate::fonts::Fonts;
+use crate::{constants::*, fonts::Fonts};
 
 #[derive(Component)]
 pub enum NumberInput {
@@ -45,7 +42,7 @@ impl NumberInputBundle {
         let text_style = TextStyle {
             font: fonts.poppins_light.clone(),
             font_size: 18.,
-            color: WHITE.into(),
+            color: WHITE,
         };
 
         cb.spawn(TextBundle {
@@ -95,10 +92,10 @@ impl NumberInputBundle {
                         TextStyle {
                             font: fonts.poppins_light.clone(),
                             font_size: 10.,
-                            color: WHITE.into(),
+                            color: WHITE,
                         },
                     ),
-                    background_color: GRAY_950.into(),
+                    background_color: GRAY_BACKGROUND.into(),
                     ..Default::default()
                 },
             ));
@@ -119,10 +116,10 @@ impl NumberInputBundle {
                         TextStyle {
                             font: fonts.poppins_light.clone(),
                             font_size: 10.,
-                            color: WHITE.into(),
+                            color: WHITE,
                         },
                     ),
-                    background_color: GRAY_950.into(),
+                    background_color: GRAY_BACKGROUND.into(),
                     ..Default::default()
                 },
             ));

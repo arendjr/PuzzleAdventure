@@ -1,14 +1,7 @@
-use bevy::{
-    color::palettes::{
-        css::WHITE,
-        tailwind::{GRAY_600, GRAY_950},
-    },
-    prelude::*,
-    window::PrimaryWindow,
-};
+use bevy::{prelude::*, window::PrimaryWindow};
 
 use crate::{
-    constants::GRID_SIZE,
+    constants::*,
     game_object::{spawn_object_of_type, GameObjectAssets, Position},
     level::Dimensions,
     Background, GameEvent, SaveLevelEvent,
@@ -32,10 +25,10 @@ pub fn on_editor_button_interaction(
                 });
             }
             Interaction::Hovered => {
-                *color = GRAY_600.into();
+                *color = LIGHT_GRAY.into();
             }
             Interaction::None => {
-                *color = GRAY_950.into();
+                *color = GRAY_BACKGROUND.into();
             }
         }
     }
@@ -63,10 +56,10 @@ pub fn on_editor_number_input_interaction(
                 events.send(event);
             }
             Interaction::Hovered => {
-                *color = GRAY_600.into();
+                *color = LIGHT_GRAY.into();
             }
             Interaction::None => {
-                *color = GRAY_950.into();
+                *color = GRAY_BACKGROUND.into();
             }
         }
     }

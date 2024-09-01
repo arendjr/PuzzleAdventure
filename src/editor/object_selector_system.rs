@@ -1,10 +1,6 @@
-use bevy::{
-    color::palettes::{
-        css::{RED, WHITE},
-        tailwind::{GRAY_600, GRAY_800},
-    },
-    prelude::*,
-};
+use bevy::prelude::*;
+
+use crate::constants::*;
 
 use super::{EditorObjectType, SelectedObjectType, SELECTOR_OUTLINE_WIDTH};
 
@@ -23,10 +19,10 @@ pub fn on_object_selector_input(
                 **selected_object_type = Some(*object_type);
             }
             Interaction::Hovered => {
-                *color = GRAY_600.into();
+                *color = LIGHT_GRAY.into();
             }
             Interaction::None => {
-                *color = GRAY_800.into();
+                *color = NORMAL_GRAY.into();
             }
         }
     }
@@ -46,7 +42,7 @@ pub fn on_selected_object_change(
 
         if let Some(mut outline) = outline {
             outline.color = if is_selected_object_type {
-                RED.into()
+                RED
             } else {
                 Color::NONE
             };
@@ -54,7 +50,7 @@ pub fn on_selected_object_change(
             commands.entity(entity).insert(Outline::new(
                 Val::Px(SELECTOR_OUTLINE_WIDTH as f32),
                 Val::ZERO,
-                RED.into(),
+                RED,
             ));
         }
     }

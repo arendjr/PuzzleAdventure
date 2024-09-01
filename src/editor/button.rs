@@ -1,9 +1,9 @@
-use bevy::{
-    color::palettes::{css::WHITE, tailwind::GRAY_950},
-    prelude::*,
-};
+use bevy::prelude::*;
 
-use crate::fonts::Fonts;
+use crate::{
+    constants::{DARK_GRAY, *},
+    fonts::Fonts,
+};
 
 #[derive(Clone, Component, Copy)]
 pub enum Button {
@@ -22,7 +22,7 @@ impl EditorButtonBundle {
             marker,
             Self {
                 button: ButtonBundle {
-                    background_color: GRAY_950.into(),
+                    background_color: DARK_GRAY.into(),
                     border_radius: BorderRadius::all(Val::Px(4.)),
                     style: Style {
                         height: Val::Px(30.),
@@ -43,7 +43,7 @@ impl EditorButtonBundle {
                 TextStyle {
                     font: fonts.poppins_light.clone(),
                     font_size: 18.,
-                    color: WHITE.into(),
+                    color: WHITE,
                 },
             ),
             style: Style {

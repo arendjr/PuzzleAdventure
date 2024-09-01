@@ -1,7 +1,4 @@
-use bevy::{
-    color::palettes::{css::RED, tailwind::GRAY_900},
-    prelude::*,
-};
+use bevy::prelude::*;
 
 use crate::{constants::*, fonts::Fonts, game_object::GameObjectAssets, level::Dimensions};
 
@@ -45,7 +42,7 @@ impl EditorBundle {
                     row_gap: Val::Px(EDITOR_PADDING as f32),
                     ..Default::default()
                 },
-                background_color: GRAY_900.into(),
+                background_color: GRAY_BACKGROUND.into(),
                 border_color: RED.into(),
                 z_index: ZIndex::Global(100),
                 ..Default::default()

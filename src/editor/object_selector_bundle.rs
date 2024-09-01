@@ -1,9 +1,9 @@
 use std::ops::{Deref, DerefMut};
 
-use bevy::{color::palettes::tailwind::GRAY_800, prelude::*};
+use bevy::prelude::*;
 
 use crate::{
-    constants::{EDITOR_WIDTH, GRID_SIZE},
+    constants::*,
     game_object::{Direction, GameObjectAssets, ObjectType},
 };
 
@@ -264,7 +264,7 @@ impl ObjectSelectorBundle {
                     column_gap: Val::Px(SELECTOR_OUTLINE_WIDTH as f32),
                     ..Default::default()
                 },
-                background_color: GRAY_800.into(),
+                background_color: NORMAL_GRAY.into(),
                 ..Default::default()
             },
             selector: ObjectSelector,

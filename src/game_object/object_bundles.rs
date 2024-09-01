@@ -273,7 +273,6 @@ pub struct PurpleBlockBundle {
     pushable: Pushable,
     sprite: SpriteBundle,
     transforms: TransformOnPush,
-    weight: Weight,
 }
 
 impl PurpleBlockBundle {
@@ -289,7 +288,6 @@ impl PurpleBlockBundle {
                 ..Default::default()
             },
             transforms: TransformOnPush(ObjectType::RedBlock),
-            weight: Weight::Heavy,
         }
     }
 }

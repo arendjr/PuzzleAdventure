@@ -1,35 +1,36 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod constants;
 mod editor;
 mod errors;
 mod fonts;
 mod game_object;
+mod gameover;
 mod level;
+mod menu;
 mod timers;
 mod utils;
 
 use std::{borrow::Cow, collections::BTreeMap, fs};
 
 use bevy::{
-    color::palettes::{
-        css::{RED, WHITE},
-        tailwind::GRAY_900,
-    },
     prelude::*,
-    window::WindowResized,
+    window::{WindowMode, WindowResized, WindowResolution},
+    winit::WinitWindows,
 };
 use constants::{BACKGROUND_SIZE, EDITOR_WIDTH, GRID_SIZE, HALF_GRID_SIZE};
 use editor::{spawn_selected_object, Editor, EditorBundle, EditorPlugin, SelectedObjectType};
 use fonts::Fonts;
 use game_object::{Direction, *};
+use gameover::{check_for_game_over, setup_gameover};
 use level::{Dimensions, InitialPositionAndDirection, Level, LEVELS};
+use menu::{on_menu_keyboard_input, render_menu, setup_menu, MenuState};
 use timers::{AnimationTimer, MovementTimer, TemporaryTimer, TransporterTimer};
 use utils::{get_level_filename, load_repeating_asset};
+use winit::window::Icon;
 
 #[derive(Component)]
 struct Background;
-
-#[derive(Component)]
-struct GameOver;
 
 #[derive(Resource)]
 struct Levels {
@@ -93,7 +94,9 @@ fn main() {
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
-                    resolution: (BACKGROUND_SIZE, BACKGROUND_SIZE).into(),
+                    mode: get_initial_window_mode(),
+                    resolution: WindowResolution::from((BACKGROUND_SIZE, BACKGROUND_SIZE))
+                        .with_scale_factor_override(1.),
                     ..default()
                 }),
                 ..default()
@@ -105,6 +108,7 @@ fn main() {
         .init_resource::<Fonts>()
         .init_resource::<GameObjectAssets>()
         .init_resource::<Levels>()
+        .init_resource::<MenuState>()
         .init_resource::<MovementTimer>()
         .init_resource::<PressedTriggers>()
         .init_resource::<TemporaryTimer>()
@@ -114,7 +118,7 @@ fn main() {
         .add_event::<GameEvent>()
         .add_event::<SaveLevelEvent>()
         .add_event::<TransformEvent>()
-        .add_systems(Startup, setup)
+        .add_systems(Startup, (set_window_icon, setup))
         .add_systems(Update, (on_keyboard_input, on_resize_system, save_level))
         .add_systems(
             Update,
@@ -130,6 +134,7 @@ fn main() {
                 despawn_volatile_objects,
                 move_objects,
                 on_game_event,
+                render_menu,
             )
                 .after(on_keyboard_input),
         )
@@ -162,6 +167,29 @@ fn main() {
                 .after(resize_background),
         )
         .run();
+}
+
+fn get_initial_window_mode() -> WindowMode {
+    if cfg!(target_os = "ios") || std::env::var_os("SteamTenfoot").is_some() {
+        WindowMode::BorderlessFullscreen
+    } else {
+        WindowMode::Windowed
+    }
+}
+
+fn set_window_icon(windows: NonSend<WinitWindows>) {
+    let (icon_rgba, icon_width, icon_height) = {
+        let image = image::load_from_memory_with_format(PLAYER_ASSET, image::ImageFormat::Png)
+            .unwrap()
+            .into_rgba8();
+        let (width, height) = image.dimensions();
+        let rgba = image.into_raw();
+        (rgba, width, height)
+    };
+    let icon = Icon::from_rgba(icon_rgba, icon_width, icon_height).unwrap();
+    for window in windows.windows.values() {
+        window.set_window_icon(Some(icon.clone()));
+    }
 }
 
 fn setup(
@@ -199,43 +227,8 @@ fn setup(
         },
     ));
 
-    commands
-        .spawn((
-            GameOver,
-            NodeBundle {
-                style: Style {
-                    display: Display::None,
-                    width: Val::Px(300.),
-                    height: Val::Px(80.),
-                    border: UiRect::all(Val::Px(2.)),
-                    margin: UiRect::all(Val::Auto),
-                    position_type: PositionType::Absolute,
-                    ..Default::default()
-                },
-                background_color: GRAY_900.into(),
-                border_color: RED.into(),
-                z_index: ZIndex::Global(100),
-                ..Default::default()
-            },
-        ))
-        .with_children(|cb| {
-            cb.spawn(TextBundle {
-                text: Text::from_section(
-                    "Game Over\n\nPress Enter to try again",
-                    TextStyle {
-                        font: fonts.poppins_light.clone(),
-                        font_size: 18.,
-                        color: WHITE.into(),
-                    },
-                )
-                .with_justify(JustifyText::Center),
-                style: Style {
-                    margin: UiRect::all(Val::Auto),
-                    ..Default::default()
-                },
-                ..Default::default()
-            });
-        });
+    setup_menu(&mut commands, &fonts);
+    setup_gameover(&mut commands, &fonts);
 
     level_events.send(GameEvent::LoadRelativeLevel(0));
 }
@@ -243,8 +236,14 @@ fn setup(
 fn on_keyboard_input(
     mut events: EventWriter<GameEvent>,
     player_query: Query<Entity, With<Player>>,
+    menu_state: ResMut<MenuState>,
     keys: Res<ButtonInput<KeyCode>>,
 ) {
+    if menu_state.is_open {
+        on_menu_keyboard_input(events, menu_state, keys);
+        return;
+    }
+
     for key in keys.get_just_pressed() {
         use KeyCode::*;
         match key {
@@ -269,14 +268,18 @@ fn on_keyboard_input(
 }
 
 fn position_entities(
-    mut query: Query<(&Position, &mut Transform), Changed<Position>>,
+    mut query: Query<(Ref<Position>, &mut Transform)>,
     dimensions: Res<Dimensions>,
 ) {
     for (position, mut transform) in &mut query {
-        transform.translation.x =
-            (-(dimensions.width * HALF_GRID_SIZE) + position.x * GRID_SIZE - HALF_GRID_SIZE) as f32;
-        transform.translation.y =
-            ((dimensions.height * HALF_GRID_SIZE) - position.y * GRID_SIZE + HALF_GRID_SIZE) as f32;
+        if position.is_changed() || dimensions.is_changed() {
+            transform.translation.x = (-(dimensions.width * HALF_GRID_SIZE)
+                + position.x * GRID_SIZE
+                - HALF_GRID_SIZE) as f32;
+            transform.translation.y = ((dimensions.height * HALF_GRID_SIZE)
+                - position.y * GRID_SIZE
+                + HALF_GRID_SIZE) as f32;
+        }
     }
 }
 
@@ -295,8 +298,8 @@ fn on_game_event(
     mut level_events: EventReader<GameEvent>,
     mut levels: ResMut<Levels>,
     mut player_query: Query<(&mut Position, Option<&Weight>), With<Player>>,
-    mut selected_object_type: ResMut<SelectedObjectType>,
     mut transform_events: EventWriter<TransformEvent>,
+    mut menu_state: ResMut<MenuState>,
     mut zoom: ResMut<Zoom>,
     editor_query: Query<Entity, With<Editor>>,
 ) {
@@ -337,12 +340,14 @@ fn on_game_event(
                 editor_events.send(EditorEvent::Toggle);
             }
             GameEvent::Exit => {
-                if selected_object_type.is_some() {
-                    **selected_object_type = None;
-                } else if editor_query.get_single().is_ok() {
+                if editor_query.get_single().is_ok() {
                     editor_events.send(EditorEvent::Toggle);
-                } else {
+                }
+
+                if menu_state.is_open {
                     app_exit_events.send(AppExit::Success);
+                } else {
+                    menu_state.is_open = true;
                 }
             }
         }
@@ -400,7 +405,7 @@ fn load_level(
         return;
     }
 
-    if cfg!(unix) {
+    if cfg!(unix) && std::env::var_os("SteamTenfoot").is_none() {
         let current_level = levels.current_level;
         match fs::read_to_string(get_level_filename(current_level + 1)) {
             Ok(content) => levels.levels[current_level] = content.into(),
@@ -471,22 +476,6 @@ fn save_level(
     }
 
     levels.levels[current_level] = content.into();
-}
-
-fn check_for_game_over(
-    mut game_over_query: Query<&mut Style, With<GameOver>>,
-    editor_query: Query<Entity, With<Editor>>,
-    player_query: Query<Entity, With<Player>>,
-) {
-    let mut game_over_style = game_over_query.get_single_mut().unwrap();
-
-    if player_query.get_single().is_ok() || editor_query.get_single().is_ok() {
-        if game_over_style.display != Display::None {
-            game_over_style.display = Display::None;
-        }
-    } else if game_over_style.display != Display::Flex {
-        game_over_style.display = Display::Flex;
-    }
 }
 
 fn spawn_level_objects(

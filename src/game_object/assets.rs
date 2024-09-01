@@ -2,6 +2,8 @@ use bevy::prelude::*;
 
 use crate::utils::load_asset;
 
+pub const PLAYER_ASSET: &[u8] = include_bytes!("../../assets/sprites/player.png");
+
 #[derive(Clone, Default, Resource)]
 pub struct GameObjectAssets {
     pub blue_block: Handle<Image>,
@@ -78,9 +80,7 @@ impl GameObjectAssets {
             ),
             grave: images.add(load_asset(include_bytes!("../../assets/sprites/grave.png"))),
             mine: images.add(load_asset(include_bytes!("../../assets/sprites/mine.png"))),
-            player: images.add(load_asset(include_bytes!(
-                "../../assets/sprites/player.png"
-            ))),
+            player: images.add(load_asset(PLAYER_ASSET)),
             purple_block: images.add(load_asset(include_bytes!(
                 "../../assets/sprites/purpleblock.png"
             ))),

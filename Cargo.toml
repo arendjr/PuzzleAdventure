@@ -22,7 +22,12 @@ bevy = { version = "0.14", default-features = false, features = [
     "wayland",
     "x11",
 ] }
+image = { version = "0.25", default-features = false, features = ["png"] }
 rand = "0.8.5"
+winit = "0.30"
+
+[build-dependencies]
+embed-resource = "1.6.3"
 
 [profile.dev]
 opt-level = 1
@@ -32,6 +37,7 @@ opt-level = 3
 
 [profile.release]
 codegen-units = 1
+opt-level = "s"
 lto = "thin"
 
 [profile.wasm-release]
