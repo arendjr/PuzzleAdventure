@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod background;
 mod constants;
 mod editor;
 mod errors;
@@ -13,12 +14,15 @@ mod utils;
 
 use std::{borrow::Cow, collections::BTreeMap, fs};
 
+use background::{
+    resize_background, setup_background, update_background_transform, Background, BackgroundAsset,
+};
 use bevy::{
     prelude::*,
     window::{WindowMode, WindowResized, WindowResolution},
     winit::WinitWindows,
 };
-use constants::{BACKGROUND_SIZE, EDITOR_WIDTH, GRID_SIZE, HALF_GRID_SIZE};
+use constants::*;
 use editor::{spawn_selected_object, Editor, EditorBundle, EditorPlugin, SelectedObjectType};
 use fonts::Fonts;
 use game_object::{Direction, *};
@@ -26,11 +30,8 @@ use gameover::{check_for_game_over, setup_gameover};
 use level::{Dimensions, InitialPositionAndDirection, Level, LEVELS};
 use menu::{on_menu_interaction_input, on_menu_keyboard_input, render_menu, setup_menu, MenuState};
 use timers::{AnimationTimer, MovementTimer, TemporaryTimer, TransporterTimer};
-use utils::{get_level_filename, load_repeating_asset};
+use utils::get_level_filename;
 use winit::window::Icon;
-
-#[derive(Component)]
-struct Background;
 
 #[derive(Resource)]
 struct Levels {
@@ -104,6 +105,7 @@ fn main() {
             EditorPlugin,
         ))
         .init_resource::<AnimationTimer>()
+        .init_resource::<BackgroundAsset>()
         .init_resource::<Dimensions>()
         .init_resource::<Fonts>()
         .init_resource::<GameObjectAssets>()
@@ -118,7 +120,7 @@ fn main() {
         .add_event::<GameEvent>()
         .add_event::<SaveLevelEvent>()
         .add_event::<TransformEvent>()
-        .add_systems(Startup, (set_window_icon, setup))
+        .add_systems(Startup, (set_window_icon, setup, setup_background))
         .add_systems(
             Update,
             (
@@ -170,7 +172,7 @@ fn main() {
         )
         .add_systems(
             Update,
-            update_level_transform
+            update_background_transform
                 .after(toggle_editor)
                 .after(resize_background),
         )
@@ -202,12 +204,12 @@ fn set_window_icon(windows: NonSend<WinitWindows>) {
 
 fn setup(
     mut commands: Commands,
+    mut events: EventWriter<GameEvent>,
+    mut fonts: ResMut<Fonts>,
     mut font_assets: ResMut<Assets<Font>>,
+    mut game_object_assets: ResMut<GameObjectAssets>,
     mut image_assets: ResMut<Assets<Image>>,
     mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
-    mut game_object_assets: ResMut<GameObjectAssets>,
-    mut level_events: EventWriter<GameEvent>,
-    mut fonts: ResMut<Fonts>,
 ) {
     *game_object_assets.as_mut() =
         GameObjectAssets::load(&mut image_assets, &mut texture_atlas_layouts);
@@ -221,24 +223,10 @@ fn setup(
 
     commands.spawn(Camera2dBundle::default());
 
-    commands.spawn((
-        Background,
-        SpriteBundle {
-            texture: image_assets.add(load_repeating_asset(include_bytes!(
-                "../assets/sprites/background.png"
-            ))),
-            ..Default::default()
-        },
-        TextureAtlas {
-            layout: Handle::default(),
-            index: 0,
-        },
-    ));
-
     setup_menu(&mut commands, &fonts);
     setup_gameover(&mut commands, &fonts);
 
-    level_events.send(GameEvent::LoadRelativeLevel(0));
+    events.send(GameEvent::LoadRelativeLevel(0));
 }
 
 fn on_keyboard_input(
@@ -360,36 +348,6 @@ fn on_game_event(
             }
         }
     }
-}
-
-fn resize_background(
-    mut background_query: Query<&mut TextureAtlas, With<Background>>,
-    mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
-    mut transform_events: EventWriter<TransformEvent>,
-    dimensions: Res<Dimensions>,
-) {
-    if !dimensions.is_changed() {
-        return;
-    }
-
-    let mut background_atlas = background_query
-        .get_single_mut()
-        .expect("there should be only one background");
-
-    let mut layout =
-        TextureAtlasLayout::new_empty(UVec2::new(BACKGROUND_SIZE as u32, BACKGROUND_SIZE as u32));
-    let x = (BACKGROUND_SIZE - dimensions.width * GRID_SIZE).clamp(0, BACKGROUND_SIZE) as u32 / 2;
-    let y = (BACKGROUND_SIZE - dimensions.height * GRID_SIZE).clamp(0, BACKGROUND_SIZE) as u32 / 2;
-    let index = layout.add_texture(URect::new(
-        x,
-        y,
-        BACKGROUND_SIZE as u32 - x,
-        BACKGROUND_SIZE as u32 - y,
-    ));
-    background_atlas.layout = texture_atlas_layouts.add(layout);
-    background_atlas.index = index;
-
-    transform_events.send(TransformEvent::Update);
 }
 
 fn on_resize_system(
@@ -544,56 +502,4 @@ fn toggle_editor(
     }
 
     transform_events.send(TransformEvent::Update);
-}
-
-fn update_level_transform(
-    mut events: EventReader<TransformEvent>,
-    mut background_query: Query<&mut Transform, With<Background>>,
-    player_query: Query<&Position, With<Player>>,
-    editor_query: Query<Entity, With<Editor>>,
-    dimensions: Res<Dimensions>,
-    window_query: Query<&Window>,
-    zoom: Res<Zoom>,
-) {
-    let Some(_event) = events.read().last() else {
-        return;
-    };
-
-    let Ok(player_position) = player_query.get_single() else {
-        return;
-    };
-
-    let mut transform = background_query
-        .get_single_mut()
-        .expect("there should be only one background");
-    let window = window_query
-        .get_single()
-        .expect("there should be only one window");
-    let window_size = window.size();
-
-    transform.scale = Vec3::new(zoom.factor, zoom.factor, 1.);
-
-    let editor_open = editor_query.get_single().is_ok();
-    let editor_width = if editor_open { EDITOR_WIDTH as f32 } else { 0. };
-    let level_width = (dimensions.width * GRID_SIZE) as f32 * zoom.factor;
-    let x = if level_width > window_size.x - editor_width {
-        let max = 0.5 * (level_width - (window_size.x - editor_width));
-        (zoom.factor
-            * ((-player_position.x as f32 + 0.5 * dimensions.width as f32) + 0.5)
-            * GRID_SIZE as f32)
-            .clamp(-max, max)
-    } else {
-        0.
-    };
-    let level_height = (dimensions.height * GRID_SIZE) as f32 * zoom.factor;
-    let y = if level_height > window_size.y {
-        let max = 0.5 * (level_height - window_size.y);
-        (zoom.factor
-            * ((player_position.y as f32 - 0.5 * dimensions.height as f32) - 0.5)
-            * GRID_SIZE as f32)
-            .clamp(-max, max)
-    } else {
-        0.
-    };
-    transform.translation = Vec3::new(x - if editor_open { 0.5 * editor_width } else { 0. }, y, 1.);
 }
